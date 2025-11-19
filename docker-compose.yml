@@ -1,5 +1,5 @@
 services:
-  postgres:
+  postgres-master:
     image: postgres:17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
@@ -17,11 +17,50 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    # based on postgresql.conf
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_replication_slots=10"
     networks:
       - db_net
 
+  postgres-replica:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATA: ${PGDATA}
+
+      MASTER: postgres-master
+      USER: replicator
+      PASSWORD: replicator
+      NAME: replication_slot_1
+    volumes:
+      - pgdata_replica:/var/lib/postgresql/data
+      - ./scripts/init_replica.sh:/usr/local/bin/init_replica.sh:ro
+    entrypoint: ["bash", "/usr/local/bin/init_replica.sh"]
+    restart: unless-stopped
+    depends_on:
+      postgres-master:
+        condition: service_healthy
+    # based on postgresql.conf
+    command:
+      - "postgres"
+      - "-c"
+      - "hot_standby=on"
+      - "-c"
+      - "hot_standby_feedback=on"
+    networks:
+      - db_net
 volumes:
   pgdata:
+  pgdata_replica:
 
 networks:
   db_net:
