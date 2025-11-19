@@ -1,5 +1,5 @@
 services:
-  postgres:
+  postgres-master:
     image: postgres:17
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
@@ -17,6 +17,14 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_replication_slots=10"
     networks:
       - db_net
 
