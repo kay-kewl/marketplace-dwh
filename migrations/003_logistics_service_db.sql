@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS shipment_status_history (
     location_type                   VARCHAR,
     location_code                   VARCHAR,
     notes                           TEXT,
-    customer_notified               BOOLEAN
+    customer_notified               BOOLEAN,
 
     CONSTRAINT fk_shipment_status_history_to_shipments
         FOREIGN KEY(shipment_external_id)
