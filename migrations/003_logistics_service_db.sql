@@ -3,7 +3,7 @@ SET search_path = public;
 
 CREATE TABLE IF NOT EXISTS warehouses (
     warehouse_id                    SERIAL PRIMARY KEY,
-    warehouse_code                  VARCHAR UNIQUE NOT NULL,
+    warehouse_code                  VARCHAR UNIQUE,
     warehouse_name                  VARCHAR,
     warehouse_type                  VARCHAR,
     country                         VARCHAR,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS warehouses (
 
 CREATE TABLE IF NOT EXISTS pickup_points (
     pickup_point_id                 SERIAL PRIMARY KEY,
-    pickup_point_code               VARCHAR UNIQUE NOT NULL,
+    pickup_point_code               VARCHAR UNIQUE,
     pickup_point_name               VARCHAR,
     pickup_point_type               VARCHAR,
     country                         VARCHAR,
@@ -51,8 +51,8 @@ CREATE TABLE IF NOT EXISTS pickup_points (
 
 CREATE TABLE IF NOT EXISTS shipments (
     shipment_id                     SERIAL PRIMARY KEY,
-    shipment_external_id            UUID UNIQUE NOT NULL,
-    order_external_id               UUID NOT NULL,
+    shipment_external_id            UUID UNIQUE,
+    order_external_id               UUID,
     tracking_number                 VARCHAR UNIQUE,
     status                          VARCHAR,
     weight_grams                    INTEGER,
@@ -61,7 +61,6 @@ CREATE TABLE IF NOT EXISTS shipments (
     origin_warehouse_code           VARCHAR,
     destination_type                VARCHAR,
     destination_pickup_point_code   VARCHAR,
-    -- destination_address_external_id UUID NOT NULL, could not parse mock data with not null
     destination_address_external_id UUID,
     created_date                    TIMESTAMP,
     dispatched_date                 TIMESTAMP,
@@ -89,7 +88,7 @@ CREATE TABLE IF NOT EXISTS shipments (
 
 CREATE TABLE IF NOT EXISTS shipment_movements (
     movement_id                     SERIAL PRIMARY KEY,
-    shipment_external_id            UUID NOT NULL,
+    shipment_external_id            UUID,
     movement_type                   VARCHAR,
     location_type                   VARCHAR,
     location_code                   VARCHAR,
@@ -97,7 +96,7 @@ CREATE TABLE IF NOT EXISTS shipment_movements (
     operator_name                   VARCHAR,
     notes                           TEXT,
     latitude                        DECIMAL,
-    longitude                      DECIMAL,
+    longitude                       DECIMAL,
     created_at                      TIMESTAMP,
     created_by                      VARCHAR,
 
@@ -108,7 +107,7 @@ CREATE TABLE IF NOT EXISTS shipment_movements (
 
 CREATE TABLE IF NOT EXISTS shipment_status_history (
     history_id                      SERIAL PRIMARY KEY,
-    shipment_external_id            UUID NOT NULL,
+    shipment_external_id            UUID,
     old_status                      VARCHAR,
     new_status                      VARCHAR,
     change_reason                   VARCHAR,
@@ -117,7 +116,7 @@ CREATE TABLE IF NOT EXISTS shipment_status_history (
     location_type                   VARCHAR,
     location_code                   VARCHAR,
     notes                           TEXT,
-    customer_notified               BOOLEAN,
+    customer_notified               BOOLEAN
 
     CONSTRAINT fk_shipment_status_history_to_shipments
         FOREIGN KEY(shipment_external_id)

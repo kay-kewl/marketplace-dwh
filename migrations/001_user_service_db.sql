@@ -3,7 +3,7 @@ SET search_path = public;
 
 CREATE TABLE IF NOT EXISTS users (
     user_id             SERIAL PRIMARY KEY,
-    user_external_id    UUID UNIQUE NOT NULL,
+    user_external_id    UUID UNIQUE,
     email               VARCHAR,
     first_name          VARCHAR,
     last_name           VARCHAR,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS user_status_history (
     history_id          SERIAL PRIMARY KEY,
-    user_external_id    UUID NOT NULL,
+    user_external_id    UUID,
     old_status          VARCHAR,
     new_status          VARCHAR,
     change_reason       VARCHAR,
@@ -39,8 +39,8 @@ CREATE TABLE IF NOT EXISTS user_status_history (
 
 CREATE TABLE IF NOT EXISTS user_addresses (
     address_id          SERIAL PRIMARY KEY,
-    address_external_id UUID UNIQUE NOT NULL,
-    user_external_id    UUID NOT NULL,
+    address_external_id UUID UNIQUE,
+    user_external_id    UUID,
     address_type        VARCHAR,
     country             VARCHAR,
     region              VARCHAR,
