@@ -32,17 +32,17 @@ docker-compose ps
 
 3. Когортный анализ
 ```bash
-docker exec -i postgres-master psql -U postgres -d order_service_db < cohort_analysis/cohort_analysis.sql
+docker exec -i marketplace-dwh-postgres-master-1 psql -U postgres -d order_service_db < cohort_analysis/cohort_analysis.sql
 ```
 
 4. Когортный анализ view
 ```bash
-docker exec -i postgres-master psql -U postgres -d order_service_db < cohort_analysis/cohort_view.sql
+docker exec -i marketplace-dwh-postgres-master-1 psql -U postgres -d order_service_db < cohort_analysis/cohort_view.sql
 ```
 
 5. Вывод таблицы с когортным анализом
 ```bash
-docker exec postgres-master psql -U postgres -d order_service_db -c "SELECT * FROM cohort_analysis_view LIMIT 5;"
+docker exec marketplace-dwh-postgres-master-1 psql -U postgres -d order_service_db -c "SELECT * FROM cohort_analysis_view LIMIT 5;"
 ```
 
 ## Connection string
