@@ -16,6 +16,14 @@
 * Проведен когортный анализ клиентов. Скрипт содержится в папке cohort_analysis
 * Скрипт конвертируется во view
 
+## Отказоустойчивость
+* Patroni управляет репликацией, автоматически переключает лидера
+* Etcd $-$ распределённое хранилище конфигураций
+* HAProxy маршрутизует запросы:
+    * Запись идёт к Primary (мастеру) на порт 5000
+    * Чтение идёт к репликам на порт 5001
+* Мигратор ожидает лидера и инициализирует схему
+
 ## Инструкция по запуску
 1. Склонировать репозиторий
 ```bash
@@ -45,9 +53,34 @@ docker exec -i marketplace-dwh-postgres-master-1 psql -U postgres -d order_servi
 docker exec marketplace-dwh-postgres-master-1 psql -U postgres -d order_service_db -c "SELECT * FROM cohort_analysis_view LIMIT 5;"
 ```
 
+6. Отказоустойчивость 
+```
+# Запуск
+cd ha/
+docker-compose up -d --build
+
+# Проверка HAProxy
+curl -I http://localhost:7001
+
+# Проверка Patroni
+docker exec -it patroni-1 curl -I http://localhost:8008/master
+docker exec -it patroni-1 curl -I http://localhost:8008/replica
+
+# Проверка БД
+docker exec -it patroni-1 pg_isready -h haproxy -p 5000
+docker exec -it patroni-1 pg_isready -h haproxy -p 5001
+```
+
 ## Connection string
-* postgresql://postgres:postgres@localhost:5432/user_service_db - подключение к user_service_db
-* postgresql://postgres:postgres@localhost:5432/order_service_db - подключение к order_service_db
-* postgresql://postgres:postgres@localhost:5432/logistics_service_db - подключение к logistics_service_db
+```
+# user_service_db
+postgresql://postgres:postgres@localhost:5432/user_service_db
+
+# order_service_db
+postgresql://postgres:postgres@localhost:5432/order_service_db
+
+# logistics_service_db
+postgresql://postgres:postgres@localhost:5432/logistics_service_db
+```
 
 
