@@ -1,0 +1,47 @@
+scope: marketplace
+namespace: /db/
+
+name: patroni-1
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: patroni-1:8008
+
+etcd3:
+  hosts: 
+    - etcd:2379
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: patroni-1:5432
+  data_dir: /var/lib/postgresql/data/patroni
+  bin_dir: /usr/lib/postgresql/17/bin
+  pgpass: /tmp/pgpass0
+  authentication:
+    superuser:
+      username: postgres
+      password: postgres
+    replication:
+      username: replicator
+      password: replicator
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    postgresql:
+      use_slots: true
+      parameters:
+        wal_level: replica
+        max_wal_senders: 10
+        max_replication_slots: 10
+        hot_standby: on
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+  pg_hba:
+    - host all all 0.0.0.0/0 scram-sha-256
+    - host replication replicator 0.0.0.0/0 scram-sha-256
+
+watchdog:
+  mode: off

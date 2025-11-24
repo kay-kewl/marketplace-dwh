@@ -11,11 +11,9 @@ ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-RUN pip install --no-cache-dir 'patroni[etcd]' psycopg2-binary
+RUN pip install --no-cache-dir 'patroni[etcd3]' psycopg2-binary
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-
-USER postgres
 
 ENTRYPOINT ["/entrypoint.sh"]

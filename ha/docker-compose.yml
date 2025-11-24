@@ -1,0 +1,157 @@
+# x-patroni-environment: &patroni-environment
+#   PATRONI_SCOPE: marketplace
+#   PATRONI_NAMESPACE: /db/
+#   PATRONI_RESTAPI_LISTEN: "0.0.0.0:8008"
+#   PATRONI_ETCD3_HOSTS: "etcd:2379"
+#   PATRONI_POSTGRESQL_LISTEN: "0.0.0.0:5432"
+#   PATRONI_POSTGRESQL_DATA_DIR: "/var/lib/postgresql/data/patroni"
+
+#   PATRONI_SUPERUSER_USERNAME: postgres
+#   PATRONI_SUPERUSER_PASSWORD: postgres
+#   PATRONI_REPLICATION_USERNAME: replicator
+#   PATRONI_REPLICATION_PASSWORD: replicator
+
+#   PATRONI_POSTGRESQL_PARAMETERS_WAL_LEVEL: replica
+#   PATRONI_POSTGRESQL_PARAMETERS_MAX_WAL_SENDERS: 10
+#   PATRONI_POSTGRESQL_PARAMETERS_MAX_REPLICATION_SLOTS: 10
+#   PATRONI_POSTGRESQL_PARAMETERS_HOT_STANDBY: "on"
+#   PATRONI_POSTGRESQL_PGHBA: >
+#     ["host all all 0.0.0.0/0 scram-sha-256", "host replication replicator 0.0.0.0/0 scram-sha-256"]
+
+x-patroni-base: &patroni-base
+  build: .
+  environment:
+    PATRONI_CONFIGURATION: "/etc/patroni/patroni.yml" 
+  depends_on:
+    etcd:
+      condition: service_healthy
+  networks:
+    - ha_net
+
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.9
+    container_name: etcd
+    command: >
+      /usr/local/bin/etcd
+      --name node1
+      --data-dir /etcd-data
+      --listen-client-urls http://0.0.0.0:2379
+      --advertise-client-urls http://etcd:2379
+      --listen-peer-urls http://0.0.0.0:2380
+      --initial-advertise-peer-urls http://etcd:2380
+      --initial-cluster node1=http://etcd:2380
+      --initial-cluster-state new
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://localhost:2379", "endpoint", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ha_net
+
+  patroni-1:
+    <<: *patroni-base
+    container_name: patroni-1
+    environment:
+      PATRONI_NAME: patroni-1
+      PATRONI_RESTAPI_CONNECT_ADDRESS: "patroni-1:8008"
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: "patroni-1:5432"
+    volumes:
+      - pgdata_1:/var/lib/postgresql/data/patroni
+      - ./patroni.yml:/etc/patroni/patroni.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8008/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command: ["patroni", "/etc/patroni/patroni.yml"]
+
+  patroni-2:
+    <<: *patroni-base
+    container_name: patroni-2
+    environment:
+      PATRONI_NAME: patroni-2
+      PATRONI_RESTAPI_CONNECT_ADDRESS: "patroni-2:8008"
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: "patroni-2:5432"
+    volumes:
+      - pgdata_2:/var/lib/postgresql/data/patroni
+      - ./patroni.yml:/etc/patroni/patroni.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8008/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command: ["patroni", "/etc/patroni/patroni.yml"]
+
+  patroni-3:
+    <<: *patroni-base
+    container_name: patroni-3
+    environment:
+      PATRONI_NAME: patroni-3
+      PATRONI_RESTAPI_CONNECT_ADDRESS: "patroni-3:8008"
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: "patroni-3:5432"
+    volumes:
+      - pgdata_3:/var/lib/postgresql/data/patroni
+      - ./patroni.yml:/etc/patroni/patroni.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8008/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command: ["patroni", "/etc/patroni/patroni.yml"]
+
+  haproxy:
+    depends_on:
+      etcd:
+        condition: service_started
+      patroni-1:
+        condition: service_healthy
+      patroni-2:
+        condition: service_healthy
+      patroni-3:
+        condition: service_healthy
+    image: haproxy:latest
+    container_name: haproxy
+    ports:
+      - "7001:7000"
+      - "5001:5001"
+      - "5000:5000"
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - ha_net
+
+  migrator:
+    image: postgres:17
+    container_name: migrator
+    depends_on:
+      haproxy:
+        condition: service_started
+    environment:
+      PGHOST: haproxy
+      PGPORT: 5000
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    volumes:
+      - ../migrations:/migrations:ro
+      - ../cohort_analysis:/cohort_analysis:ro
+    command: >
+      bash -c "
+      until pg_isready; do sleep 1; done
+
+      psql -f /migrations/000_create_dbs.sql
+      psql -d user_service_db -f /migrations/001_user_service_db.sql
+      psql -d order_service_db -f /migrations/002_order_service_db.sql
+      psql -d logistics_service_db -f /migrations/003_logistics_service_db.sql
+
+      psql -d order_service_db -f /cohort_analysis/cohort_view.sql
+      "
+
+volumes:
+  pgdata_1:
+  pgdata_2:
+  pgdata_3:
+
+networks:
+  ha_net:
