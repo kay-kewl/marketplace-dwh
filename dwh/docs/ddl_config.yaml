@@ -1,0 +1,513 @@
+sources:
+  - name: user_service
+    description: Сервис управления пользователями
+    tables:
+      - name: users
+        hub: hub_user
+        business_key: user_external_id
+        business_key_type: UUID
+        satellite: sat_user_details
+        attributes:
+          - name: email
+            type: VARCHAR(255)
+            description: Email пользователя
+          - name: first_name
+            type: VARCHAR(100)
+            description: Имя
+          - name: last_name
+            type: VARCHAR(100)
+            description: Фамилия
+          - name: phone
+            type: VARCHAR(20)
+            description: Телефон
+          - name: date_of_birth
+            type: DATE
+            description: Дата рождения
+          - name: registration_date
+            type: TIMESTAMP
+            description: Дата регистрации
+          - name: status
+            type: VARCHAR(50)
+            description: Текущий статус
+          - name: effective_from
+            type: TIMESTAMP
+            description: Начало действия версии
+          - name: effective_to
+            type: TIMESTAMP
+            description: Окончание действия версии
+          - name: is_current
+            type: BOOLEAN
+            description: Признак текущей версии
+          - name: created_at
+            type: TIMESTAMP
+            description: Время создания записи
+          - name: updated_at
+            type: TIMESTAMP
+            description: Время обновления записи
+          - name: created_by
+            type: VARCHAR(100)
+            description: Кто создал
+          - name: updated_by
+            type: VARCHAR(100)
+            description: Кто обновил
+
+      - name: user_status_history
+        hub_ref: hub_user
+        business_key_ref: user_external_id
+        satellite: sat_user_status_history
+        attributes:
+          - name: old_status
+            type: VARCHAR(50)
+            description: Предыдущий статус
+          - name: new_status
+            type: VARCHAR(50)
+            description: Новый статус
+          - name: change_reason
+            type: VARCHAR(200)
+            description: Причина изменения
+          - name: changed_at
+            type: TIMESTAMP
+            description: Время изменения
+          - name: changed_by
+            type: VARCHAR(100)
+            description: Кто изменил
+          - name: session_id
+            type: VARCHAR(100)
+            description: ID сессии
+          - name: ip_address
+            type: INET
+            description: IP адрес
+          - name: user_agent
+            type: TEXT
+            description: User agent
+
+      - name: user_addresses
+        hub: hub_address
+        business_key: address_external_id
+        business_key_type: UUID
+        satellite: sat_address_details
+        links:
+          - name: link_user_address
+            hub_left: hub_user
+            hub_right: hub_address
+            unique: true
+            description: Связь пользователя с адресом
+        attributes:
+          - name: address_type
+            type: VARCHAR(50)
+            description: Тип адреса
+          - name: country
+            type: VARCHAR(100)
+            description: Страна
+          - name: region
+            type: VARCHAR(100)
+            description: Регион/область
+          - name: city
+            type: VARCHAR(100)
+            description: Город
+          - name: street_address
+            type: VARCHAR(200)
+            description: Улица, дом
+          - name: postal_code
+            type: VARCHAR(20)
+            description: Почтовый индекс
+          - name: apartment
+            type: VARCHAR(50)
+            description: Квартира/офис
+          - name: is_default
+            type: BOOLEAN
+            description: Адрес по умолчанию
+          - name: effective_from
+            type: TIMESTAMP
+            description: Начало действия
+          - name: effective_to
+            type: TIMESTAMP
+            description: Окончание действия
+          - name: is_current
+            type: BOOLEAN
+            description: Признак текущей версии
+
+  - name: order_service
+    description: Сервис обработки заказов
+    tables:
+      - name: products
+        hub: hub_product
+        business_key: product_sku
+        business_key_type: VARCHAR(100)
+        satellite: sat_product_details
+        attributes:
+          - name: product_name
+            type: VARCHAR(200)
+            description: Наименование товара
+          - name: category
+            type: VARCHAR(100)
+            description: Категория
+          - name: brand
+            type: VARCHAR(100)
+            description: Бренд
+          - name: price
+            type: DECIMAL(10,2)
+            description: Цена
+          - name: currency
+            type: VARCHAR(3)
+            description: Валюта
+          - name: weight_grams
+            type: INTEGER
+            description: Вес в граммах
+          - name: dimensions_length_cm
+            type: DECIMAL(10,2)
+            description: Длина
+          - name: dimensions_width_cm
+            type: DECIMAL(10,2)
+            description: Ширина
+          - name: dimensions_height_cm
+            type: DECIMAL(10,2)
+            description: Высота
+          - name: is_active
+            type: BOOLEAN
+            description: Активен
+          - name: effective_from
+            type: TIMESTAMP
+            description: Начало действия
+          - name: effective_to
+            type: TIMESTAMP
+            description: Окончание действия
+          - name: is_current
+            type: BOOLEAN
+            description: Признак текущей версии
+
+      - name: orders
+        hub: hub_order
+        business_key: order_external_id
+        business_key_type: UUID
+        satellite: sat_order_details
+        links:
+          - name: link_order_user
+            hub_left: hub_order
+            hub_right: hub_user
+            unique: true
+            description: Связь заказа с пользователем
+          - name: link_order_address
+            hub_left: hub_order
+            hub_right: hub_address
+            unique: false
+            description: Связь заказа с адресом доставки
+        attributes:
+          - name: order_number
+            type: VARCHAR(50)
+            description: Номер заказа
+          - name: order_date
+            type: TIMESTAMP
+            description: Дата заказа
+          - name: status
+            type: VARCHAR(50)
+            description: Статус
+          - name: subtotal
+            type: DECIMAL(10,2)
+            description: Сумма без налогов
+          - name: tax_amount
+            type: DECIMAL(10,2)
+            description: Налог
+          - name: shipping_cost
+            type: DECIMAL(10,2)
+            description: Стоимость доставки
+          - name: discount_amount
+            type: DECIMAL(10,2)
+            description: Скидка
+          - name: total_amount
+            type: DECIMAL(10,2)
+            description: Итого
+          - name: currency
+            type: VARCHAR(3)
+            description: Валюта
+          - name: delivery_type
+            type: VARCHAR(50)
+            description: Тип доставки
+          - name: expected_delivery_date
+            type: DATE
+            description: Ожидаемая дата доставки
+          - name: actual_delivery_date
+            type: DATE
+            description: Фактическая дата доставки
+          - name: payment_method
+            type: VARCHAR(50)
+            description: Способ оплаты
+          - name: payment_status
+            type: VARCHAR(50)
+            description: Статус оплаты
+
+      - name: order_status_history
+        hub_ref: hub_order
+        business_key_ref: order_external_id
+        satellite: sat_order_status_history
+        attributes:
+          - name: old_status
+            type: VARCHAR(50)
+            description: Предыдущий статус
+          - name: new_status
+            type: VARCHAR(50)
+            description: Новый статус
+          - name: change_reason
+            type: VARCHAR(200)
+            description: Причина изменения
+          - name: changed_at
+            type: TIMESTAMP
+            description: Время изменения
+          - name: changed_by
+            type: VARCHAR(100)
+            description: Кто изменил
+          - name: session_id
+            type: VARCHAR(100)
+            description: ID сессии
+          - name: ip_address
+            type: INET
+            description: IP адрес
+          - name: notes
+            type: TEXT
+            description: Примечания
+
+      - name: order_items
+        link: link_order_product
+        hub_refs:
+          order: hub_order
+          product: hub_product
+        business_keys:
+          order: order_external_id
+          product: product_sku
+        satellite: sat_order_item_details
+        attributes:
+          - name: quantity
+            type: INTEGER
+            description: Количество
+          - name: unit_price
+            type: DECIMAL(10,2)
+            description: Цена за единицу
+          - name: total_price
+            type: DECIMAL(10,2)
+            description: Общая стоимость
+          - name: product_name_snapshot
+            type: VARCHAR(200)
+            description: Название товара на момент заказа
+          - name: product_category_snapshot
+            type: VARCHAR(100)
+            description: Категория на момент заказа
+          - name: product_brand_snapshot
+            type: VARCHAR(100)
+            description: Бренд на момент заказа
+          - name: created_at
+            type: TIMESTAMP
+            description: Время создания
+          - name: updated_at
+            type: TIMESTAMP
+            description: Время обновления
+
+  - name: logistics_service
+    description: Сервис логистики
+    tables:
+      - name: warehouses
+        hub: hub_warehouse
+        business_key: warehouse_code
+        business_key_type: VARCHAR(50)
+        satellite: sat_warehouse_details
+        attributes:
+          - name: warehouse_name
+            type: VARCHAR(200)
+            description: Название склада
+          - name: warehouse_type
+            type: VARCHAR(50)
+            description: Тип склада
+          - name: country
+            type: VARCHAR(100)
+            description: Страна
+          - name: region
+            type: VARCHAR(100)
+            description: Регион
+          - name: city
+            type: VARCHAR(100)
+            description: Город
+          - name: street_address
+            type: VARCHAR(200)
+            description: Адрес
+          - name: postal_code
+            type: VARCHAR(20)
+            description: Почтовый индекс
+          - name: is_active
+            type: BOOLEAN
+            description: Активен
+          - name: max_capacity_cubic_meters
+            type: DECIMAL(10,2)
+            description: Макс. вместимость
+          - name: operating_hours
+            type: VARCHAR(100)
+            description: Часы работы
+          - name: contact_phone
+            type: VARCHAR(20)
+            description: Контактный телефон
+          - name: manager_name
+            type: VARCHAR(100)
+            description: Имя менеджера
+
+      - name: pickup_points
+        hub: hub_pickup_point
+        business_key: pickup_point_code
+        business_key_type: VARCHAR(50)
+        satellite: sat_pickup_point_details
+        attributes:
+          - name: pickup_point_name
+            type: VARCHAR(200)
+            description: Название ПВЗ
+          - name: pickup_point_type
+            type: VARCHAR(50)
+            description: Тип ПВЗ
+          - name: country
+            type: VARCHAR(100)
+            description: Страна
+          - name: region
+            type: VARCHAR(100)
+            description: Регион
+          - name: city
+            type: VARCHAR(100)
+            description: Город
+          - name: street_address
+            type: VARCHAR(200)
+            description: Адрес
+          - name: postal_code
+            type: VARCHAR(20)
+            description: Почтовый индекс
+          - name: is_active
+            type: BOOLEAN
+            description: Активен
+          - name: max_capacity_packages
+            type: INTEGER
+            description: Макс. вместимость (посылки)
+          - name: operating_hours
+            type: VARCHAR(100)
+            description: Часы работы
+          - name: contact_phone
+            type: VARCHAR(20)
+            description: Контактный телефон
+          - name: partner_name
+            type: VARCHAR(100)
+            description: Имя партнера
+
+      - name: shipments
+        hub: hub_shipment
+        business_key: shipment_external_id
+        business_key_type: UUID
+        satellite: sat_shipment_details
+        links:
+          - name: link_shipment_order
+            hub_left: hub_shipment
+            hub_right: hub_order
+            unique: true
+            description: Связь отправления с заказом
+          - name: link_shipment_warehouse
+            hub_left: hub_shipment
+            hub_right: hub_warehouse
+            unique: false
+            description: Связь отправления со складом отправки
+          - name: link_shipment_pickup_point
+            hub_left: hub_shipment
+            hub_right: hub_pickup_point
+            unique: false
+            description: Связь отправления с ПВЗ доставки
+        attributes:
+          - name: tracking_number
+            type: VARCHAR(100)
+            description: Трек-номер
+          - name: status
+            type: VARCHAR(50)
+            description: Статус
+          - name: weight_grams
+            type: INTEGER
+            description: Вес в граммах
+          - name: volume_cubic_cm
+            type: INTEGER
+            description: Объем
+          - name: package_count
+            type: INTEGER
+            description: Количество посылок
+          - name: created_date
+            type: TIMESTAMP
+            description: Дата создания
+          - name: dispatched_date
+            type: TIMESTAMP
+            description: Дата отправки
+          - name: estimated_delivery_date
+            type: TIMESTAMP
+            description: Ожидаемая дата доставки
+          - name: actual_delivery_date
+            type: TIMESTAMP
+            description: Фактическая дата доставки
+          - name: delivery_notes
+            type: TEXT
+            description: Примечания к доставке
+          - name: recipient_name
+            type: VARCHAR(200)
+            description: Имя получателя
+          - name: delivery_signature
+            type: VARCHAR(100)
+            description: Подпись о получении
+
+      - name: shipment_movements
+        hub_ref: hub_shipment
+        business_key_ref: shipment_external_id
+        satellite: sat_shipment_movements
+        attributes:
+          - name: movement_type
+            type: VARCHAR(50)
+            description: Тип перемещения
+          - name: location_type
+            type: VARCHAR(50)
+            description: Тип локации
+          - name: location_code
+            type: VARCHAR(50)
+            description: Код локации
+          - name: movement_datetime
+            type: TIMESTAMP
+            description: Время перемещения
+          - name: operator_name
+            type: VARCHAR(100)
+            description: Оператор
+          - name: notes
+            type: TEXT
+            description: Примечания
+          - name: latitude
+            type: DECIMAL(10,8)
+            description: Широта
+          - name: longitude
+            type: DECIMAL(11,8)
+            description: Долгота
+
+      - name: shipment_status_history
+        hub_ref: hub_shipment
+        business_key_ref: shipment_external_id
+        satellite: sat_shipment_status_history
+        attributes:
+          - name: old_status
+            type: VARCHAR(50)
+            description: Предыдущий статус
+          - name: new_status
+            type: VARCHAR(50)
+            description: Новый статус
+          - name: change_reason
+            type: VARCHAR(200)
+            description: Причина изменения
+          - name: changed_at
+            type: TIMESTAMP
+            description: Время изменения
+          - name: changed_by
+            type: VARCHAR(100)
+            description: Кто изменил
+          - name: location_type
+            type: VARCHAR(50)
+            description: Тип локации
+          - name: location_code
+            type: VARCHAR(50)
+            description: Код локации
+          - name: notes
+            type: TEXT
+            description: Примечания
+          - name: customer_notified
+            type: BOOLEAN
+            description: Клиент уведомлен
