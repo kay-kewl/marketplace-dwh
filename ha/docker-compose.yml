@@ -148,10 +148,32 @@ services:
       psql -d order_service_db -f /cohort_analysis/cohort_view.sql
       "
 
+  dwh-postgres:
+    image: postgres:17
+    container_name: dwh-postgres
+    environment:
+      POSTGRES_USER: dwh_user
+      POSTGRES_PASSWORD: dwh_password
+      POSTGRES_DB: dwh
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5433:5432" 
+    volumes:
+      - dwh_data:/var/lib/postgresql/data
+      - ../dwh/ddl:/docker-entrypoint-initdb.d:ro
+    networks:
+      - ha_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dwh_user -d dwh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 volumes:
   pgdata_1:
   pgdata_2:
   pgdata_3:
+  dwh_data:
 
 networks:
   ha_net:
