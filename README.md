@@ -83,4 +83,34 @@ postgresql://postgres:postgres@localhost:5432/order_service_db
 postgresql://postgres:postgres@localhost:5432/logistics_service_db
 ```
 
+# Homework 2
+## Архитектура
+Data Vault 2.0
+## Обоснование выбора архитектуры
 
+
+## DDL
+В файле dwh/docs/entities.md содержится описание хабов, линков и сателитов для DDL детального слоя.
+
+В файле dwh/docs/ddl_config.yaml содержится конфигурация, которая подается на вход скриптам для генерации кода DDL.
+
+Написаны скрипты для автоматического создания DDL детального слоя в папке dwh/scripts
+
+## Инструкция по запуску
+1. Запустить скрипты генерации инициализации DDL
+Необходимо выполнить из корня проекта
+```
+# установка библиотеки 
+python -m pip install pyyaml  
+
+# запуск скриптов
+python dwh/scripts/generate_hubs.py
+python dwh/scripts/generate_links.py
+python dwh/scripts/generate_satellites.py
+python dwh/scripts/generate_ddl.py
+```
+2. Запустить сервисы
+```
+cd ha/
+docker-compose up -d dwh-postgres
+```
