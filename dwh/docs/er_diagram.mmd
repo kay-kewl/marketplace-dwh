@@ -1,0 +1,277 @@
+erDiagram
+    HUB_USER {
+        uuid user_external_id PK
+    }
+    
+    HUB_ADDRESS {
+        uuid address_external_id PK
+    }
+    
+    HUB_PRODUCT {
+        varchar product_sku PK
+    }
+    
+    HUB_ORDER {
+        uuid order_external_id PK
+    }
+    
+    HUB_WAREHOUSE {
+        varchar warehouse_code PK
+    }
+    
+    HUB_PICKUP_POINT {
+        varchar pickup_point_code PK
+    }
+    
+    HUB_SHIPMENT {
+        uuid shipment_external_id PK
+    }
+    
+    SAT_USER_DETAILS {
+        uuid user_external_id FK
+        timestamp effective_from
+        timestamp effective_to
+        boolean is_current
+        varchar email
+        varchar first_name
+        varchar last_name
+        varchar phone
+        date date_of_birth
+        timestamp registration_date
+        varchar status
+        timestamp created_at
+        timestamp updated_at
+        varchar created_by
+        varchar updated_by
+    }
+    
+    SAT_USER_STATUS_HISTORY {
+        uuid user_external_id FK
+        varchar old_status
+        varchar new_status
+        varchar change_reason
+        timestamp changed_at
+        varchar changed_by
+        varchar session_id
+        inet ip_address
+        text user_agent
+    }
+    
+    SAT_ADDRESS_DETAILS {
+        uuid address_external_id FK
+        timestamp effective_from
+        timestamp effective_to
+        boolean is_current
+        varchar address_type
+        varchar country
+        varchar region
+        varchar city
+        varchar street_address
+        varchar postal_code
+        varchar apartment
+        boolean is_default
+    }
+    
+    SAT_PRODUCT_DETAILS {
+        varchar product_sku FK
+        timestamp effective_from
+        timestamp effective_to
+        boolean is_current
+        varchar product_name
+        varchar category
+        varchar brand
+        decimal price
+        varchar currency
+        integer weight_grams
+        decimal dimensions_length
+        decimal dimensions_width
+        decimal dimensions_height
+        boolean is_active
+    }
+    
+    SAT_ORDER_DETAILS {
+        uuid order_external_id FK
+        varchar order_number
+        timestamp order_date
+        varchar status
+        decimal subtotal
+        decimal tax_amount
+        decimal shipping_cost
+        decimal discount_amount
+        decimal total_amount
+        varchar currency
+        varchar delivery_type
+        date expected_delivery_date
+        date actual_delivery_date
+        varchar payment_method
+        varchar payment_status
+    }
+    
+    SAT_ORDER_STATUS_HISTORY {
+        uuid order_external_id FK
+        varchar old_status
+        varchar new_status
+        varchar change_reason
+        timestamp changed_at
+        varchar changed_by
+        varchar session_id
+        inet ip_address
+        text notes
+    }
+    
+    SAT_ORDER_ITEM_DETAILS {
+        uuid order_external_id FK
+        varchar product_sku FK
+        integer quantity
+        decimal unit_price
+        decimal total_price
+        varchar product_name_snapshot
+        varchar category_snapshot
+        varchar brand_snapshot
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    SAT_WAREHOUSE_DETAILS {
+        varchar warehouse_code FK
+        varchar warehouse_name
+        varchar warehouse_type
+        varchar country
+        varchar region
+        varchar city
+        varchar street_address
+        varchar postal_code
+        boolean is_active
+        decimal max_capacity
+        varchar operating_hours
+        varchar contact_phone
+        varchar manager_name
+    }
+    
+    SAT_PICKUP_POINT_DETAILS {
+        varchar pickup_point_code FK
+        varchar pickup_point_name
+        varchar pickup_point_type
+        varchar country
+        varchar region
+        varchar city
+        varchar street_address
+        varchar postal_code
+        boolean is_active
+        integer max_capacity
+        varchar operating_hours
+        varchar contact_phone
+        varchar partner_name
+    }
+    
+    SAT_SHIPMENT_DETAILS {
+        uuid shipment_external_id FK
+        varchar tracking_number
+        varchar status
+        integer weight_grams
+        integer volume_cubic_cm
+        integer package_count
+        timestamp created_date
+        timestamp dispatched_date
+        timestamp estimated_delivery_date
+        timestamp actual_delivery_date
+        text delivery_notes
+        varchar recipient_name
+        varchar delivery_signature
+    }
+    
+    SAT_SHIPMENT_MOVEMENTS {
+        uuid shipment_external_id FK
+        varchar movement_type
+        varchar location_type
+        varchar location_code
+        timestamp movement_datetime
+        varchar operator_name
+        text notes
+        decimal latitude
+        decimal longitude
+    }
+    
+    SAT_SHIPMENT_STATUS_HISTORY {
+        uuid shipment_external_id FK
+        varchar old_status
+        varchar new_status
+        varchar change_reason
+        timestamp changed_at
+        varchar changed_by
+        varchar location_type
+        varchar location_code
+        text notes
+        boolean customer_notified
+    }
+    
+    LINK_USER_ADDRESS {
+        uuid user_external_id FK
+        uuid address_external_id FK
+    }
+    
+    LINK_ORDER_USER {
+        uuid order_external_id FK
+        uuid user_external_id FK
+    }
+    
+    LINK_ORDER_ADDRESS {
+        uuid order_external_id FK
+        uuid address_external_id FK
+    }
+    
+    LINK_ORDER_PRODUCT {
+        uuid order_external_id FK
+        varchar product_sku FK
+    }
+    
+    LINK_SHIPMENT_ORDER {
+        uuid shipment_external_id FK
+        uuid order_external_id FK
+    }
+    
+    LINK_SHIPMENT_WAREHOUSE {
+        uuid shipment_external_id FK
+        varchar warehouse_code FK
+    }
+    
+    LINK_SHIPMENT_PICKUP_POINT {
+        uuid shipment_external_id FK
+        varchar pickup_point_code FK
+    }
+    
+    %% Relationships Hubs -> Satellites
+    HUB_USER ||--o{ SAT_USER_DETAILS : has
+    HUB_USER ||--o{ SAT_USER_STATUS_HISTORY : has
+    HUB_ADDRESS ||--o{ SAT_ADDRESS_DETAILS : has
+    HUB_PRODUCT ||--o{ SAT_PRODUCT_DETAILS : has
+    HUB_ORDER ||--o{ SAT_ORDER_DETAILS : has
+    HUB_ORDER ||--o{ SAT_ORDER_STATUS_HISTORY : has
+    HUB_ORDER ||--o{ SAT_ORDER_ITEM_DETAILS : has
+    HUB_WAREHOUSE ||--o{ SAT_WAREHOUSE_DETAILS : has
+    HUB_PICKUP_POINT ||--o{ SAT_PICKUP_POINT_DETAILS : has
+    HUB_SHIPMENT ||--o{ SAT_SHIPMENT_DETAILS : has
+    HUB_SHIPMENT ||--o{ SAT_SHIPMENT_MOVEMENTS : has
+    HUB_SHIPMENT ||--o{ SAT_SHIPMENT_STATUS_HISTORY : has
+    
+    %% Relationships Links
+    HUB_USER ||--o{ LINK_USER_ADDRESS : connects_to
+    HUB_ADDRESS ||--o{ LINK_USER_ADDRESS : connected_from
+    
+    HUB_ORDER ||--o{ LINK_ORDER_USER : belongs_to
+    HUB_USER ||--o{ LINK_ORDER_USER : has_orders
+    
+    HUB_ORDER ||--o{ LINK_ORDER_ADDRESS : delivered_to
+    HUB_ADDRESS ||--o{ LINK_ORDER_ADDRESS : used_for
+    
+    HUB_ORDER ||--o{ LINK_ORDER_PRODUCT : contains
+    HUB_PRODUCT ||--o{ LINK_ORDER_PRODUCT : included_in
+    
+    HUB_SHIPMENT ||--o{ LINK_SHIPMENT_ORDER : corresponds_to
+    HUB_ORDER ||--o{ LINK_SHIPMENT_ORDER : has_shipment
+    
+    HUB_SHIPMENT ||--o{ LINK_SHIPMENT_WAREHOUSE : shipped_from
+    HUB_WAREHOUSE ||--o{ LINK_SHIPMENT_WAREHOUSE : processes
+    
+    HUB_SHIPMENT ||--o{ LINK_SHIPMENT_PICKUP_POINT : delivered_to
+    HUB_PICKUP_POINT ||--o{ LINK_SHIPMENT_PICKUP_POINT : receives

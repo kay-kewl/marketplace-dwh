@@ -96,6 +96,10 @@ Data Vault 2.0
 
 Написаны скрипты для автоматического создания DDL детального слоя в папке dwh/scripts
 
+ER-диаграмма:
+![ER-диаграмма](./dwh/docs/dwh_ddl.png)
+Построена по mermaid файлу dwh/docs/er_diagram.mmd
+
 ## Инструкция по запуску
 1. Запустить скрипты генерации инициализации DDL
 Необходимо выполнить из корня проекта
@@ -113,4 +117,8 @@ python dwh/scripts/generate_ddl.py
 ```
 cd ha/
 docker-compose up -d dwh-postgres
+```
+3. Проверка создания таблиц
+```
+docker-compose exec postgres-dwh psql -U dwh_user -d dwh -c "\dt dwh_detailed.*"
 ```
