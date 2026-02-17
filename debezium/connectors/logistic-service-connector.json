@@ -1,0 +1,20 @@
+{
+    "name": "logistics-service-connector",
+    "config": {
+        "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+        "database.hostname": "haproxy",
+        "database.port": "5000",
+        "database.user": "postgres",
+        "database.password": "postgres",
+        "database.dbname": "logistics_service_db",
+        "database.server.name": "logistics_service",
+        "plugin.name": "pgoutput",
+        "slot.name": "debezium_logistics_slot",
+        "table.include.list": "public.warehouses,public.pickup_points,public.shipments,public.shipment_movements,public.shipment_status_history",
+        "tombstones.on.delete": "false",
+        "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "value.converter.schemas.enable": "false",
+        "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "key.converter.schemas.enable": "false"
+    }
+}

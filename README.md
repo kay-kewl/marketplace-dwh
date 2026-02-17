@@ -105,6 +105,12 @@ ER-диаграмма:
 ![ER-диаграмма](./dwh/docs/dwh_ddl.png)
 Построена по mermaid файлу dwh/docs/er_diagram.mmd
 
+## Kafka + Debezium
+Поднят debezium с автоматическим подключением коннекторов. Проверить создание топиков:
+```
+docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list
+```
+
 ## Инструкция по запуску
 1. Запустить скрипты генерации инициализации DDL
 Необходимо выполнить из корня проекта
@@ -121,9 +127,16 @@ python dwh/scripts/generate_ddl.py
 2. Запустить сервисы
 ```
 cd ha/
-docker-compose up -d dwh-postgres
+docker-compose up -d
 ```
 3. Проверка создания таблиц
 ```
 docker-compose exec postgres-dwh psql -U dwh_user -d dwh -c "\dt dwh_detailed.*"
 ```
+
+4. Проверка работы debezium
+```
+cd ../debezium
+./scripts/check-debezium.sh
+```
+
