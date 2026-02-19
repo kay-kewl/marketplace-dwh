@@ -1,0 +1,149 @@
+import json
+import logging
+import time
+import psycopg2
+from psycopg2 import sql
+from psycopg2.extras import execute_values
+
+logger = logging.getLogger(__name__)
+
+class DBManager:
+    def __init__(self, destination):
+        self.destination = destination
+        self.conn = None
+        self._connect()
+
+    def _connect(self):
+        while not self.conn:
+            try:
+                self.conn = psycopg2.connect(self.destination)
+                self.conn.autocommit = False
+            except Exception as e:
+                logger.error(f"Database connection failed: {e}. Retrying in 5 seconds...")
+                time.sleep(5)
+
+    def close(self):
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+
+    def insert_records(self, current, items: list):
+        if not items:
+            return []
+
+        q = """
+            INSERT INTO dwh_detailed.stg_kafka_events 
+            (topic, partition, "offset", kafka_ts_ms, key_bytes, value_bytes, payload_json, op, source_ts_ms, error_msg)
+            VALUES %s
+            ON CONFLICT (topic, partition, "offset") DO NOTHING
+            RETURNING topic, partition, "offset"
+        """
+
+        rows = []
+        for p in items:
+            kafka_ts = p.timestamp()[1] if p.timestamp()[1] > 0 else None
+            parsed = p.parsed
+            rows.append((
+                parsed.topic,
+                parsed.partition,
+                parsed.offset,
+                kafka_ts,
+                parsed.key_bytes,
+                parsed.value_bytes,
+                json.dumps(parsed.payload) if parsed.payload else None,
+                parsed.op,
+                parsed.ts_ms,
+                parsed.error
+            ))
+
+        execute_values(current, q, rows, page_size=len(rows))
+        return current.fetchall()
+    
+    def load_hub(self, current, table, bk_column, bk_value, source):
+        if bk_value is None:
+            return
+        
+        q = sql.SQL("""
+            INSERT INTO dwh_detailed.{tbl} ({id_col}, {bk_col}, source_system_id)
+            VALUES (dwh_detailed.md5_hash(%s), %s, dwh_detailed.get_source_id(%s))
+            ON CONFLICT ({id_col}) DO NOTHING
+        """).format(
+            tbl=sql.Identifier(table),
+            id_col=sql.Identifier(f"{table}_id"),
+            bk_col=sql.Identifier(bk_column)
+        )
+
+        current.execute(q, (str(bk_value), bk_value, source))
+
+    def load_link(self, current, table, parents, source):
+        sorted_parents = sorted(parents, key=lambda x: x['hub'])
+        columns, values, parameters, hash_parts = [], [], [], []
+        for parent in sorted_parents:
+            if parent['val'] is None:
+                return
+            
+            columns.append(sql.Identifier(f"{parent['hub']}_id"))
+            values.append(sql.SQL("dwh_detailed.md5_hash(%s)"))
+            parameters.append(str(parent['val']))
+            hash_parts.append({"h": parent['hub'], "v": str(parent['val'])})
+
+        link_hk_json = json.dumps(hash_parts, separators=(',', ':'))
+
+        columns.append(sql.Identifier(f"{table}_id"))
+        values.append(sql.SQL("dwh_detailed.md5_hash(%s)"))
+        parameters.append(link_hk_json)
+
+        columns.append(sql.Identifier("source_system_id"))
+        values.append(sql.SQL("dwh_detailed.get_source_id(%s)"))
+        parameters.append(source)
+
+        q = sql.SQL("""
+            INSERT INTO dwh_detailed.{tbl} ({cols})
+            VALUES ({vals})
+            ON CONFLICT ({id_col}) DO NOTHING
+        """).format(
+            tbl=sql.Identifier(table),
+            cols=sql.SQL(', ').join(columns),
+            vals=sql.SQL(', ').join(values),
+            id_col=sql.Identifier(f"{table}_id")
+        )
+
+        current.execute(q, parameters)
+
+    def load_satellite(self, current, table, hub, hub_bk, source, attributes, row, is_deleted):
+        if hub_bk is None:
+            return
+        
+        attribute_values = [row.get(attr) for attr in attributes]
+        hash_input = json.dumps(attribute_values + [is_deleted], default=str)
+        
+        columns = [
+            sql.Identifier(f"{hub}_id"), sql.Identifier("source_system_id"), sql.Identifier("hash_diff"), 
+            sql.Identifier("is_deleted"), sql.Identifier("effective_from")
+        ]
+
+        values = [
+            sql.SQL("dwh_detailed.md5_hash(%s)"), sql.SQL("dwh_detailed.get_source_id(%s)"), 
+            sql.SQL("dwh_detailed_md5_hash(%s)"), sql.SQL("%s"), sql.SQL("NOW()")
+        ]
+
+        parameters = [str(hub_bk), source, hash_input, is_deleted]
+
+        for attr, value in zip(attributes, attribute_values):
+            columns.append(sql.Identifier(attr))
+            values.append(sql.SQL("%s"))
+            parameters.append(value)
+
+        q = sql.SQL("""
+            INSERT INTO dwh_detailed.{tbl} ({cols})
+            VALUES ({vals})
+            ON CONFLICT (hub_id, hash_diff) DO NOTHING
+        """).format(
+            tbl=sql.Identifier(table),
+            cols=sql.SQL(', ').join(columns),
+            vals=sql.SQL(', ').join(values),
+            hub_id=sql.Identifier(f"{hub}_id"),
+        )
+
+        current.execute(q, parameters)
+        
