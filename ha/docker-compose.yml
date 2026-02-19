@@ -302,7 +302,7 @@ services:
         condition: service_healthy
     environment:
       PG_DESTINATION: "postgresql://dwh_user:dwh_password@dwh-postgres:5432/dwh"
-      KAFKA_BOOTSTRAP: "kafka:9092"
+      KAFKA_BOOTSTRAP: "kafka:29092"
       CONFIG_PATH: "/app/config/ddl_config.yaml"
       KAFKA_GROUP_ID: "dmp_group"
       BATCH_SIZE: 300
