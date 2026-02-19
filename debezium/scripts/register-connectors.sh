@@ -1,4 +1,5 @@
 #!/bin/sh
+set -eu
 
 DEBEZIUM_URL="http://debezium:8083"
 MAX_RETRIES=30
