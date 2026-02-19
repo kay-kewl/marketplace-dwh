@@ -17,23 +17,33 @@ wait_for_debezium() {
 }
 
 register_connector() {
-    local connector_file=$1
-    local connector_name=$(basename "$connector_file" .json)
+    connector_file=$1
+    connector_name=$(sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$connector_file" | head -n 1)
+    if [ -z "$connector_name" ]; then
+        echo "Connector name not found in $connector_file"
+        return 1
+    fi
         
     if curl -s -f "$DEBEZIUM_URL/connectors/$connector_name" > /dev/null 2>&1; then
         curl -X DELETE "$DEBEZIUM_URL/connectors/$connector_name"
         sleep 2
     fi
     
-    response=$(curl -s -X POST -H "Content-Type: application/json" \
+    http_code=$(curl -s -o /tmp/connector_response.json -w "%{http_code}" -X POST -H "Content-Type: application/json" \
         --data @"$connector_file" \
         "$DEBEZIUM_URL/connectors")
+
+    if [ "$http_code" != "201" ]; then
+        echo "Failed to register connector $connector_name with HTTP code $http_code"
+        cat /tmp/connector_response.json
+        return 1
+    fi
 }
 
 main() {
     wait_for_debezium
 
-    for connector_file in /connectors/register-*.json; do
+    for connector_file in /connectors/*-connector.json; do
         if [ -f "$connector_file" ]; then
             register_connector "$connector_file"
             sleep 2
