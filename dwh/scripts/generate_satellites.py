@@ -77,7 +77,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.{name} (
     
     CONSTRAINT fk_{name}_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_{name}_content UNIQUE ({parent_key}, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_{name}_parent 

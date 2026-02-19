@@ -1,6 +1,6 @@
-CREATE TABLE IF NOT EXISTS dwh_detailed;
+CREATE SCHEMA IF NOT EXISTS dwh_detailed;
 
-CREATE TABLE IF NOT EXISTS dwh_detailed.stg_kafka_events {
+CREATE TABLE IF NOT EXISTS dwh_detailed.stg_kafka_events (
     topic           TEXT NOT NULL,
     partition       INT NOT NULL,
     "offset"        BIGINT NOT NULL,
@@ -17,4 +17,4 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.stg_kafka_events {
     error_msg       TEXT,
 
     CONSTRAINT pk_stg_kafka_events PRIMARY KEY (topic, partition, "offset")
-}
+)

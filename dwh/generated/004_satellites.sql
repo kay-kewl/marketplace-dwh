@@ -24,7 +24,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_user_details (
     
     CONSTRAINT fk_sat_user_details_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_user_details_content UNIQUE (hub_user_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_user_details_parent 
@@ -78,7 +80,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_user_status_history (
     
     CONSTRAINT fk_sat_user_status_history_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_user_status_history_content UNIQUE (hub_user_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_user_status_history_parent 
@@ -133,7 +137,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_address_details (
     
     CONSTRAINT fk_sat_address_details_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_address_details_content UNIQUE (hub_address_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_address_details_parent 
@@ -190,7 +196,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_product_details (
     
     CONSTRAINT fk_sat_product_details_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_product_details_content UNIQUE (hub_product_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_product_details_parent 
@@ -253,7 +261,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_order_details (
     
     CONSTRAINT fk_sat_order_details_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_order_details_content UNIQUE (hub_order_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_order_details_parent 
@@ -314,7 +324,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_order_status_history (
     
     CONSTRAINT fk_sat_order_status_history_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_order_status_history_content UNIQUE (hub_order_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_order_status_history_parent 
@@ -367,7 +379,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_order_item_details (
     
     CONSTRAINT fk_sat_order_item_details_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_order_item_details_content UNIQUE (link_order_product_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_order_item_details_parent 
@@ -424,7 +438,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_warehouse_details (
     
     CONSTRAINT fk_sat_warehouse_details_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_warehouse_details_content UNIQUE (hub_warehouse_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_warehouse_details_parent 
@@ -487,7 +503,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_pickup_point_details (
     
     CONSTRAINT fk_sat_pickup_point_details_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_pickup_point_details_content UNIQUE (hub_pickup_point_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_pickup_point_details_parent 
@@ -550,7 +568,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_shipment_details (
     
     CONSTRAINT fk_sat_shipment_details_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_shipment_details_content UNIQUE (hub_shipment_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_shipment_details_parent 
@@ -609,7 +629,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_shipment_movements (
     
     CONSTRAINT fk_sat_shipment_movements_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_shipment_movements_content UNIQUE (hub_shipment_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_shipment_movements_parent 
@@ -665,7 +687,9 @@ CREATE TABLE IF NOT EXISTS dwh_detailed.sat_shipment_status_history (
     
     CONSTRAINT fk_sat_shipment_status_history_source_system 
         FOREIGN KEY (source_system_id) 
-        REFERENCES dwh_detailed.source_system(source_system_id)
+        REFERENCES dwh_detailed.source_system(source_system_id),
+    
+    CONSTRAINT uk_sat_shipment_status_history_content UNIQUE (hub_shipment_id, hash_diff)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sat_shipment_status_history_parent 
