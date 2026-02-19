@@ -155,16 +155,18 @@ services:
     volumes:
       - ../migrations:/migrations:ro
       - ../cohort_analysis:/cohort_analysis:ro
+    networks:
+      - ha_net
     command: >
       bash -c "
-      until pg_isready; do sleep 1; done
+      until pg_isready; do sleep 1; done;
+      until psql -tA -c 'SELECT NOT pg_is_in_recovery()' | grep -q t; do sleep 1; done
 
-      psql -f /migrations/000_create_dbs.sql
-      psql -d user_service_db -f /migrations/001_user_service_db.sql
-      psql -d order_service_db -f /migrations/002_order_service_db.sql
-      psql -d logistics_service_db -f /migrations/003_logistics_service_db.sql
-
-      psql -d order_service_db -f /cohort_analysis/cohort_view.sql
+      psql -v ON_ERROR_STOP=1 -f /migrations/000_create_dbs.sql &&
+      psql -v ON_ERROR_STOP=1 -d user_service_db -f /migrations/001_user_service_db.sql &&
+      psql -v ON_ERROR_STOP=1 -d order_service_db -f /migrations/002_order_service_db.sql &&
+      psql -v ON_ERROR_STOP=1 -d logistics_service_db -f /migrations/003_logistics_service_db.sql &&
+      psql -v ON_ERROR_STOP=1 -d order_service_db -f /cohort_analysis/cohort_view.sql
       "
 
   dwh-postgres:
@@ -283,7 +285,7 @@ services:
     command: >
       sh -c "
       sleep 10 &&
-      sh ../debezium/scripts/register-connectors.sh &&
+      sh /scripts/register-connectors.sh &&
       echo 'All connectors registered!' &&
       tail -f /dev/null
       "
