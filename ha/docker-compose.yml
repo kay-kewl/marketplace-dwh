@@ -290,6 +290,29 @@ services:
     networks:
       - ha_net
 
+  dmp:
+    build: ../dmp
+    container_name: dmp
+    depends_on:
+      kafka:
+        condition: service_healthy
+      debezium:
+        condition: service_healthy
+      dwh-postgres:
+        condition: service_healthy
+    environment:
+      PG_DESTINATION: "postgresql://dwh_user:dwh_password@dwh-postgres:5432/dwh"
+      KAFKA_BOOTSTRAP: "kafka:29092"
+      CONFIG_PATH: "/app/config/ddl_config.yaml"
+      KAFKA_GROUP_ID: "dmp_group"
+      BATCH_SIZE: 300
+    volumes:
+      - ../dwh/docs:/app/config:ro
+    networks:
+      - ha_net
+    restart:
+      unless-stopped
+
 volumes:
   pgdata_1:
   pgdata_2:

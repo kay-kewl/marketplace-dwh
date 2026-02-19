@@ -1,0 +1,10 @@
+import logging 
+import os
+
+def setup_logging():
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", "INFO"),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
+
+    logging.getLogger("confluent_kafka").setLevel(logging.WARNING)
