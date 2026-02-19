@@ -22,7 +22,7 @@ def main():
     db_manager = DBManager(os.environ["PG_DESTINATION"])
 
     consumer = Consumer({
-        'bootstrap.servers': os.environ("KAFKA_BOOTSTRAP"),
+        'bootstrap.servers': os.environ["KAFKA_BOOTSTRAP"],
         'group.id': os.environ.get("KAFKA_GROUP_ID", "dmp_consumer_group"),
         'auto.offset.reset': 'earliest',
         'enable.auto.commit': False,
@@ -112,4 +112,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

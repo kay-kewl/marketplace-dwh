@@ -12,14 +12,14 @@ class ConfigLoader:
         self._parse(raw)
 
     def _parse(self, raw):
-        for source in raw,get('sources', []):
+        for source in raw.get('sources', []):
             source_name = source['name']
             for table in source.get('tables', []):
                 topic = f"{source_name}.public.{table['name']}"
                 
                 conf = {
                     "source_name": source_name,
-                    "business_key": table['business_key'],
+                    "business_key": table.get('business_key'),
                     "hub_target": table.get("hub") or table.get("hub_ref"),
                     "sat_target": table.get("satellite") or table.get("sat"),
                     "link_target": table.get("link"),
