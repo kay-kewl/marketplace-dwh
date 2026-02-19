@@ -38,7 +38,7 @@ def main():
             if not messages:
                 continue
 
-            valid_messages = []
+            parsed_messages = []
             max_offsets = {}
 
             for message in messages:
@@ -46,24 +46,25 @@ def main():
                     continue
 
                 parsed = parse_message(message)
-                message.parsed = parsed
-
-                valid_messages.append(message)
+                parsed_messages.append({
+                    "message": message,
+                    "parsed": parsed
+                })
 
                 tp = (parsed.topic, parsed.partition)
                 if tp not in max_offsets or parsed.offset > max_offsets[tp]:
                     max_offsets[tp] = parsed.offset
 
-            if not valid_messages:
+            if not parsed_messages:
                 continue
 
             with db_manager.conn.cursor() as cursor:
-                inserted = db_manager.insert_staging(cursor, valid_messages)
+                inserted = db_manager.insert_records(cursor, parsed_messages)
                 inserted_keys = set(inserted)
 
-                for message in valid_messages:
-                    parsed = message.parsed
-                    if (p.topic, p.partition, p.offset) not in inserted_keys:
+                for item in parsed_messages:
+                    parsed = item['parsed']
+                    if (parsed.topic, parsed.partition, parsed.offset) not in inserted_keys:
                         continue
 
                     if parsed.error or not parsed.payload:
@@ -73,32 +74,46 @@ def main():
                     if not conf:
                         continue
 
-                    is_deleted = parsed.op == 'd'
-                    row = parsed.payload.get('before') if is_deleted else parsed.payload.get('after')
-                    if not row:
-                        continue
+                    cursor.execute("SAVEPOINT msg_sp")
+                    try:                        
+                        is_deleted = parsed.op == 'd'
+                        row = parsed.payload.get('before') if is_deleted else parsed.payload.get('after')
+                        if not row:
+                            cursor.execute("RELEASE SAVEPOINT msg_sp")
+                            continue
 
-                    src = conf['source_name']
+                        src = conf['source_name']
 
-                    bk = row.get(conf['business_key'])
-                    if conf['hub_target']:
-                        db_manager.load_hub(cursor, conf['hub_target'], conf['business_key'], bk, src)
+                        bk = row.get(conf['business_key'])
+                        if conf['hub_target']:
+                            db_manager.load_hub(cursor, conf['hub_target'], conf['business_key'], bk, src)
 
-                        if conf['sat_target']:
-                            db_manager.load_satellite(cursor, conf['sat_target'], conf['hub_target'], 
-                                                      bk, src, conf['attributes'], row, is_deleted)
-                            
-                    if conf['link_target'] and conf['link_parents']:
-                        parents = []
-                        for lp in conf['link_parents']:
-                            value = row.get(lp['field'])
-                            db_manager.load_hub(cursor, lp['hub'], lp['field'], val, src)
-                            parents.append({
-                                "hub": lp['hub'],
-                                "val": value
-                            })
+                            if conf['sat_target']:
+                                db_manager.load_satellite(cursor, conf['sat_target'], conf['hub_target'], 
+                                                        bk, src, conf['attributes'], row, is_deleted)
+                                
+                        if conf['link_target'] and conf['link_parents']:
+                            parents = []
+                            for lp in conf['link_parents']:
+                                hub_name = lp.get("hub")
+                                field_name = lp.get("field")
+                                if not hub_name or not field_name:
+                                    continue
 
-                        db_manager.load_link(cursor, conf['link_target'], parents, src)
+                                value = row.get(field_name)
+                                db_manager.load_hub(cursor, hub_name, field_name, value, src)
+                                parents.append({
+                                    "hub": hub_name,
+                                    "val": value
+                                })
+
+                            if parents:
+                                db_manager.load_link(cursor, conf['link_target'], parents, src)
+                        cursor.execute("RELEASE SAVEPOINT msg_sp")
+                    except Exception as e:
+                        logger.exception(f"Error processing message from topic {parsed.topic}, partition {parsed.partition}, offset {parsed.offset}: {e}")
+                        cursor.execute("ROLLBACK TO SAVEPOINT msg_sp")
+                        cursor.execute("RELEASE SAVEPOINT msg_sp")
             db_manager.conn.commit()
 
             for (t, p), offset in max_offsets.items():
