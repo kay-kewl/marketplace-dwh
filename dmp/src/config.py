@@ -3,6 +3,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+ATTRIBUTES = {
+    "effective_from",
+    "effective_to",
+    "is_current",
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by",
+}
+
 class ConfigLoader:
     def __init__(self, path: str):
         self.topics = {}
@@ -19,18 +29,24 @@ class ConfigLoader:
                 
                 conf = {
                     "source_name": source_name,
-                    "business_key": table.get('business_key'),
+                    "business_key": table.get('business_key') or table.get("business_key_ref"),
                     "hub_target": table.get("hub") or table.get("hub_ref"),
                     "sat_target": table.get("satellite") or table.get("sat"),
                     "link_target": table.get("link"),
-                    "attributes": [a['name'] for a in table.get('attributes', [])],
+                    "attributes": [
+                        a['name'] for a in table.get('attributes', []) if a['name'] not in ATTRIBUTES
+                    ],
                     "link_parents": []
                 }
 
                 if conf['link_target']:
                     hub_refs = table.get('hub_refs', [])
+                    business_keys = table.get('business_keys', {})
                     if isinstance(hub_refs, dict):
-                        for hub, field in hub_refs.items():
+                        for key, hub in hub_refs.items():
+                            field = business_keys.get(key) if isinstance(business_keys, dict) else None
+                            if not field:
+                                field = key
                             conf['link_parents'].append({
                                 "hub": hub,
                                 "field": field
