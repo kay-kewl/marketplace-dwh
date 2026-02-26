@@ -110,6 +110,12 @@ ER-диаграмма:
 ```
 docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list
 ```
+## DMP
+
+## Iceberg + MinIO
+Добавлено масштабируемое хранилище MinIO + Iceberg(табличный формат). В качестве вычислительного движка используется Apache Spark. Код Spark-приложения расположен в директории spark/
+
+В ha/docker-compose добавлены новые сервисы minio, spark-iceberg, mc
 
 ## Инструкция по запуску
 1. Запустить скрипты генерации инициализации DDL
@@ -131,7 +137,7 @@ docker-compose up -d
 ```
 3. Проверка создания таблиц
 ```
-docker-compose exec postgres-dwh psql -U dwh_user -d dwh -c "\dt dwh_detailed.*"
+docker-compose exec dwh-postgres psql -U dwh_user -d dwh -c "\dt dwh_detailed.*"
 ```
 
 4. Проверка работы debezium
@@ -140,3 +146,13 @@ cd ../debezium
 ./scripts/check-debezium.sh
 ```
 
+5. Проверка подключения коннекторов
+```
+curl -s http://localhost:8083/connectors | jq .
+```
+
+6. Протестировать запись в MinIO
+```
+cd spark/scripts
+./check_system.sh
+```
