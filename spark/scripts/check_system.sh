@@ -90,22 +90,23 @@ user_id=$(docker exec $master_node psql postgresql://postgres:postgres@localhost
 INSERT INTO users (user_external_id, email, first_name, last_name, phone, status)
 VALUES (gen_random_uuid(), 'test.data.$(date +%s)@example.com', 'Test', 'Data', '+1234567890', 'ACTIVE')
 RETURNING user_external_id;
-" | xargs)
+" | head -1 | tr -d ' ')
 echo "Created user: $user_id"
 
 order_id=$(docker exec $master_node psql postgresql://postgres:postgres@localhost:5432/order_service_db -tA -c "
 INSERT INTO orders (order_external_id, user_external_id, order_number, status, total_amount, currency)
 VALUES (gen_random_uuid(), '$user_id', 'TEST-ORDER-$(date +%s)', 'NEW', 99.99, 'RUB')
 RETURNING order_external_id;
-" | xargs)
+" | head -1 | tr -d ' ')
 echo "Created order: $order_id"
 
 shipment_id=$(docker exec $master_node psql postgresql://postgres:postgres@localhost:5432/logistics_service_db -tA -c "
 INSERT INTO shipments (shipment_external_id, order_external_id, tracking_number, status, weight_grams, package_count)
 VALUES (gen_random_uuid(), '$order_id', 'TRK-$(date +%s)', 'CREATED', 500, 1)
 RETURNING shipment_external_id;
-" | xargs)
+" | head -1 | tr -d ' ')
 echo "Created shipment: $shipment_id"
+
 
 echo "Waiting 20 seconds for data to propagate through Kafka, DWH and Iceberg..."
 sleep 20
