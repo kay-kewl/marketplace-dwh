@@ -234,10 +234,11 @@ services:
     networks:
       - ha_net
     healthcheck:
-      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "bash", "-c", "nc -z localhost 9092 && kafka-topics --bootstrap-server localhost:9092 --list > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   debezium:
@@ -314,6 +315,91 @@ services:
       - ha_net
     restart:
       unless-stopped
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    networks:
+      - ha_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mc:
+    image: minio/mc:latest
+    container_name: mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO...' &&
+      sleep 10 &&
+      mc alias set myminio http://minio:9000 minioadmin minioadmin &&
+      mc mb myminio/warehouse --ignore-existing &&
+      mc mb myminio/checkpoints --ignore-existing &&
+      echo 'Buckets created successfully' &&
+      tail -f /dev/null
+      "
+    networks:
+      - ha_net
+  spark-iceberg:
+    build:
+      context: ../spark
+      dockerfile: Dockerfile
+    image: spark-iceberg:latest
+    container_name: spark-iceberg
+    depends_on:
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_ENDPOINT=http://minio:9000
+      - AWS_REGION=us-east-1
+      - KAFKA_BOOTSTRAP=kafka:29092
+      - SPARK_HOME=/opt/spark
+      - PATH=/opt/spark/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    volumes:
+      - ../spark/app:/app:ro
+      - ../spark/scripts:/scripts:ro
+      - spark_data:/opt/spark/data
+      - /tmp/derby:/tmp/derby  # Для metastore
+    networks:
+      - ha_net
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+      - "8081:8081"
+    command: >
+      sh -c "
+      echo 'Starting Spark master and worker...' &&
+      echo 'Checking Spark installation...' &&
+      ls -la /opt/spark/bin/ &&
+      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master --host spark-iceberg --port 7077 --webui-port 8080 &
+      sleep 5 &&
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-iceberg:7077 --webui-port 8081 &
+      sleep 10 &&
+      echo 'Submitting streaming job...' &&
+      /scripts/submit_job.sh
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   pgdata_1:
@@ -322,6 +408,8 @@ volumes:
   dwh_data:
   kafka_data:
   zookeeper_data:
+  minio_data:
+  spark_data:
 
 networks:
   ha_net:
