@@ -11,8 +11,39 @@ setup_logging()
 logger = logging.getLogger(__name__)
 running = {"status": True}
 
+HUB_FIELD_CANDIDATES = {
+    "hub_user": ["user_external_id"],
+    "hub_order": ["order_external_id"],
+    "hub_address": ["address_external_id", "delivery_address_external_id", "destination_address_external_id"],
+    "hub_product": ["product_sku"],
+    "hub_warehouse": ["warehouse_code", "origin_warehouse_code", "location_code"],
+    "hub_pickup_point": ["pickup_point_code", "destination_pickup_point_code", "location_code"],
+    "hub_shipment": ["shipment_external_id"],
+}
+
+HUB_BK_COLUMNS = {
+    "hub_user": "user_external_id",
+    "hub_order": "order_external_id",
+    "hub_address": "address_external_id",
+    "hub_product": "product_sku",
+    "hub_warehouse": "warehouse_code",
+    "hub_pickup_point": "pickup_point_code",
+    "hub_shipment": "shipment_external_id",
+}
+
 def signal_handler(signal, frame):
     running["status"] = False
+
+def resolve_parent_value(row, field_name, hub_name):
+    if field_name and row.get(field_name) is not None:
+        return row.get(field_name), field_name
+
+    candidates = HUB_FIELD_CANDIDATES.get(hub_name, [])
+    for candidate in candidates:
+        if row.get(candidate) is not None:
+            return row.get(candidate), candidate
+
+    return None, field_name
 
 def main():
     signal.signal(signal.SIGINT, signal_handler)
@@ -84,7 +115,7 @@ def main():
 
                         src = conf['source_name']
 
-                        bk = row.get(conf['business_key'])
+                        bk = row.get(conf['business_key']) if conf['business_key'] else None
                         if conf['hub_target']:
                             db_manager.load_hub(cursor, conf['hub_target'], conf['business_key'], bk, src)
 
@@ -92,23 +123,52 @@ def main():
                                 db_manager.load_satellite(cursor, conf['sat_target'], conf['hub_target'], 
                                                         bk, src, conf['attributes'], row, is_deleted)
                                 
-                        if conf['link_target'] and conf['link_parents']:
+                        link_defs = conf.get('link_defs', [])
+                        if not link_defs and conf.get('link_target') and conf.get('link_parents'):
+                            link_defs = [{
+                                "target": conf['link_target'],
+                                "parents": conf['link_parents']
+                            }]
+
+                        for link_def in link_defs:
+                            link_target = link_def.get('target')
+                            link_parents = link_def.get('parents', [])
+                            if not link_target or not link_parents:
+                                continue
+
                             parents = []
-                            for lp in conf['link_parents']:
+                            for lp in link_parents:
                                 hub_name = lp.get("hub")
                                 field_name = lp.get("field")
-                                if not hub_name or not field_name:
+                                if not hub_name:
                                     continue
 
-                                value = row.get(field_name)
-                                db_manager.load_hub(cursor, hub_name, field_name, value, src)
+                                value, resolved_field = resolve_parent_value(row, field_name, hub_name)
+                                if value is None:
+                                    continue
+
+                                hub_bk_column = HUB_BK_COLUMNS.get(hub_name, resolved_field)
+                                db_manager.load_hub(cursor, hub_name, hub_bk_column, value, src)
                                 parents.append({
                                     "hub": hub_name,
                                     "val": value
                                 })
 
-                            if parents:
-                                db_manager.load_link(cursor, conf['link_target'], parents, src)
+                            if len(parents) != len(link_parents):
+                                continue
+
+                            link_bk = db_manager.load_link(cursor, link_target, parents, src)
+                            if conf['sat_target'] and link_bk and not conf.get('hub_target'):
+                                db_manager.load_satellite(
+                                    cursor, 
+                                    conf['sat_target'], 
+                                    link_target, 
+                                    link_bk, 
+                                    src, 
+                                    conf['attributes'], 
+                                    row, 
+                                    is_deleted
+                                )
                         cursor.execute("RELEASE SAVEPOINT msg_sp")
                     except Exception as e:
                         logger.exception(f"Error processing message from topic {parsed.topic}, partition {parsed.partition}, offset {parsed.offset}: {e}")
