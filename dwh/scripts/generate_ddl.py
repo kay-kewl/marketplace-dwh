@@ -1,6 +1,5 @@
 import os
 import subprocess
-from datetime import datetime
 
 def generate_hash_functions():
     content = """
@@ -151,17 +150,5 @@ SET search_path TO dwh_detailed, public;
 COMMIT;
 """)
     
-    ddl_path = "dwh/ddl/001_dwh_schema.sql"
-    with open(ddl_path, "w", encoding='utf-8') as outfile:
-        outfile.write(f"""
-CREATE SCHEMA IF NOT EXISTS dwh_detailed;
-""")
-        
-        for filename in sql_files:
-            filepath = f"dwh/generated/{filename}"
-            if os.path.exists(filepath):
-                with open(filepath, "r", encoding='utf-8') as infile:
-                    outfile.write(infile.read())
-                    outfile.write("\n")
 if __name__ == "__main__":
     main()
