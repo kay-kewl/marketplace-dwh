@@ -159,8 +159,10 @@ docker compose -f ha/docker-compose.yml logs migrator
 
 Проверка статуса `migrator`:
 ```
-docker compose -f ha/docker-compose.yml ps migrator
+docker compose -f ha/docker-compose.yml ps -a migrator
 ```
+
+Должно быть `Exited (0)`.
 
 3. Проверка репликации
 ```
@@ -188,3 +190,19 @@ bash spark/scripts/check_system.sh
 ```
 
 Если ошибок нет и видно прирост Kafka offsets, `stg_kafka_events`, `iceberg.default.events_raw`, то система поднята.
+
+## Для подключения
+```
+# DWH PostgreSQL
+postgresql://dwh_user:dwh_password@localhost:5433/dwh
+
+# Debezium Connect API
+http://localhost:8083
+
+# Kafka bootstrap
+localhost:9092
+
+# MinIO API / Console
+http://localhost:9000
+http://localhost:9001
+```
