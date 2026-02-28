@@ -158,22 +158,25 @@ services:
     networks:
       - ha_net
     command: >
-      bash -c "
+      bash -ceu "
+      set -o pipefail;
       until pg_isready -h haproxy -p 5000; do sleep 1; done;
 
       PRIMARY_HOST='';
       until [ -n \"$$PRIMARY_HOST\" ]; do
         for node in patroni-1 patroni-2 patroni-3; do
-          if psql \"postgresql://postgres:postgres@node:5432/postgres\" -tA -c 'SELECT NOT pg_is_in_recovery()' 2>/dev/null | grep -q t; then
-            PRIMARY_HOST=$$node
-            break
-          fi
-        done
-        [ -n \"$$PRIMARY_HOST\" ] || sleep 1
+          if psql \"postgresql://postgres:postgres@$$node:5432/postgres\" -tA -c \"SELECT NOT pg_is_in_recovery()\" 2>/dev/null | grep -q '^t$$'; then
+            PRIMARY_HOST=$$node;
+            break;
+          fi;
+        done;
+        [ -n \"$$PRIMARY_HOST\" ] || sleep 1;
       done;
 
-      EXPORT PGHOST=$$PRIMARY_HOST;
-      EXPORT PGPORT=5432;
+      export PGHOST=$$PRIMARY_HOST;
+      export PGPORT=5432;
+      export PGUSER=postgres;
+      export PGPASSWORD=postgres;
 
       psql -v ON_ERROR_STOP=1 -f /migrations/000_create_dbs.sql &&
       psql -v ON_ERROR_STOP=1 -d user_service_db -f /migrations/001_user_service_db.sql &&
@@ -293,6 +296,8 @@ services:
     depends_on:
       debezium:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     volumes:
       - ../debezium/scripts:/scripts:ro
       - ../debezium/connectors:/connectors:ro
