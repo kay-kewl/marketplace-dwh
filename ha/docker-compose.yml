@@ -159,8 +159,21 @@ services:
       - ha_net
     command: >
       bash -c "
-      until pg_isready; do sleep 1; done;
-      until psql -tA -c 'SELECT NOT pg_is_in_recovery()' | grep -q t; do sleep 1; done
+      until pg_isready -h haproxy -p 5000; do sleep 1; done;
+
+      PRIMARY_HOST='';
+      until [ -n \"$$PRIMARY_HOST\" ]; do
+        for node in patroni-1 patroni-2 patroni-3; do
+          if psql \"postgresql://postgres:postgres@node:5432/postgres\" -tA -c 'SELECT NOT pg_is_in_recovery()' 2>/dev/null | grep -q t; then
+            PRIMARY_HOST=$$node
+            break
+          fi
+        done
+        [ -n \"$$PRIMARY_HOST\" ] || sleep 1
+      done;
+
+      EXPORT PGHOST=$$PRIMARY_HOST;
+      EXPORT PGPORT=5432;
 
       psql -v ON_ERROR_STOP=1 -f /migrations/000_create_dbs.sql &&
       psql -v ON_ERROR_STOP=1 -d user_service_db -f /migrations/001_user_service_db.sql &&
