@@ -184,16 +184,64 @@ class DBManager:
 
         current.execute(q, parameters)
         return link_hk_json
+    
+    def _parent_hash_value(self, parent_bk):
+        if isinstance(parent_bk, (dict, list)):
+            return json.dumps(parent_bk, separators=(',', ':'))
+        return str(parent_bk)
 
-    def load_satellite(self, current, table, hub, hub_bk, source, attributes, row, is_deleted):
-        if hub_bk is None:
+    def load_satellite(self, current, table, parent_table, parent_bk, source, attributes, row, is_deleted):
+        if parent_bk is None:
             return
+
+        parent_id_col = f"{parent_table}_id"
+        parent_hash = self._parent_hash_value(parent_bk)
         
         attribute_values = [row.get(attr) for attr in attributes]
         hash_input = json.dumps(attribute_values + [is_deleted], default=str)
+
+        current.execute(
+            sql.SQL("""
+                SELECT hash_diff 
+                FROM dwh_detailed.{tbl}
+                WHERE {parent_col} = dwh_detailed.md5_hash(%s)
+                    AND source_system_id = dwh_detailed.get_source_id(%s)
+                    AND is_current = TRUE
+                ORDER BY effective_from DESC
+                LIMIT 1
+            """).format(
+                tbl=sql.Identifier(table),
+                parent_col=sql.Identifier(parent_id_col)
+            ),
+            (parent_hash, source)
+        )
+
+        existing = current.fetchone()
+
+        current.execute("SELECT dwh_detailed.md5_hash(%s)", (hash_input,))
+        new_hash_diff = current.fetchone()[0]
+
+        if existing and existing[0] == new_hash_diff:
+            return
+        
+        current.execute(
+            sql.SQL("""
+                UPDATE dwh_detailed.{tbl}
+                SET effective_to = NOW(), 
+                    is_current = FALSE
+                WHERE {parent_col} = dwh_detailed.md5_hash(%s)
+                    AND source_system_id = dwh_detailed.get_source_id(%s)
+                    AND is_current = TRUE
+            """).format(
+                tbl=sql.Identifier(table),
+                parent_col=sql.Identifier(parent_id_col)
+            ),
+            (parent_hash, source)
+        )
+                                
         
         columns = [
-            sql.Identifier(f"{hub}_id"), sql.Identifier("source_system_id"), sql.Identifier("hash_diff"), 
+            sql.Identifier(parent_id_col), sql.Identifier("source_system_id"), sql.Identifier("hash_diff"), 
             sql.Identifier("effective_from")
         ]
 
@@ -202,7 +250,7 @@ class DBManager:
             sql.SQL("dwh_detailed.md5_hash(%s)"), sql.SQL("NOW()")
         ]
 
-        parameters = [str(hub_bk), source, hash_input]
+        parameters = [parent_hash, source, hash_input]
 
         for attribute, value in zip(attributes, attribute_values):
             value = normalize_value(value, attribute)
