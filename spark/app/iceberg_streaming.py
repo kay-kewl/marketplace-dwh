@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 import os
-from datetime import datetime
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, lit
+from pyspark.sql.functions import (
+    col, 
+    current_timestamp,
+    coalesce,
+    split,
+    get_json_object,
+    from_unixtime,
+    to_timestamp
+)
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +35,8 @@ TOPICS = [
     "logistics_service.public.shipment_status_history"
 ]
 
+ICEBERG_TABLE = "iceberg.events_raw"
+
 def create_spark_session():
     return SparkSession.builder \
         .appName("Kafka to Iceberg Writer") \
@@ -52,14 +61,18 @@ def init_iceberg_tables(spark):
             partition INT,
             offset BIGINT,
             kafka_timestamp TIMESTAMP,
+            event_ts_ms BIGINT,
             event_timestamp TIMESTAMP,
             event_type STRING,
             source_db STRING,
             source_table STRING,
+            key_json STRING,
+            before_json STRING,
+            after_json STRING,
             record_json STRING,
             load_timestamp TIMESTAMP
         ) USING iceberg
-        PARTITIONED BY (days(event_timestamp))
+        PARTITIONED BY (days(kafka_timestamp), source_db)
         LOCATION 's3a://warehouse/events_raw'
     """)
     logger.info("Iceberg tables initialized")
@@ -70,7 +83,7 @@ def main():
     spark.sparkContext.setLogLevel("WARN")
     init_iceberg_tables(spark)
 
-    df = spark.readStream \
+    raw_df = spark.readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP) \
         .option("subscribe", ",".join(TOPICS)) \
@@ -84,25 +97,53 @@ def main():
             "partition",
             "offset",
             "timestamp as kafka_timestamp",
+            "CAST(key AS STRING) as key_json",
             "CAST(value AS STRING) as record_json"
         )
 
-    final_df = df.withColumn("event_timestamp", lit(None).cast("timestamp")) \
-                 .withColumn("event_type", lit("UNKNOWN")) \
-                 .withColumn("source_db", lit(None)) \
-                 .withColumn("source_table", lit(None)) \
-                 .withColumn("load_timestamp", lit(datetime.now()))
+    parsed_df = raw_df \
+        .withColumn("source_db", split(col("topic"), "\\.").getItem(0)) \
+        .withColumn("source_table", split(col("topic"), "\\.").getItem(2)) \
+        .withColumn("event_type", get_json_object(col("record_json"), "$.payload.op")) \
+        .withColumn("event_ts_ms", coalesce(
+            get_json_object(col("record_json"), "$.payload.source.ts_ms").cast("bigint"),
+            get_json_object(col("record_json"), "$.payload.ts_ms").cast("bigint"),
+        )) \
+        .withColumn("event_timestamp", coalesce(
+            to_timestamp(from_unixtime((col("event_ts_ms") / 1000.0))),
+            col("kafka_timestamp")
+        )) \
+        .withColumn("before_json", get_json_object(col("record_json"), "$.payload.before")) \
+        .withColumn("after_json", get_json_object(col("record_json"), "$.payload.after")) \
+        .withColumn("load_timestamp", current_timestamp())
+
+    final_df = parsed_df.select(
+        "topic",
+        "partition",
+        "offset",
+        "kafka_timestamp",
+        "event_ts_ms",
+        "event_timestamp",
+        "event_type",
+        "source_db",
+        "source_table",
+        "key_json",
+        "before_json",
+        "after_json",
+        "record_json",
+        "load_timestamp"
+    )
 
     def write_to_iceberg(df, epoch_id):
         count = df.count()
         logger.info(f"Writing epoch {epoch_id} with {count} records")
         if count > 0:
-            df.show(5, truncate=False)
-            df.write.format("iceberg").mode("append").save("iceberg.events_raw")
+            df.select("topic", "event_type", "source_db", "source_table", "offset").show(5, truncate=False)
+            df.write.format("iceberg").mode("append").save(ICEBERG_TABLE)
 
     query = final_df.writeStream \
         .foreachBatch(write_to_iceberg) \
-        .outputMode("update") \
+        .outputMode("append") \
         .trigger(processingTime="10 seconds") \
         .option("checkpointLocation", "s3a://warehouse/checkpoints/iceberg") \
         .start()
