@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 
 def generate_hash_functions():
     content = """
@@ -110,11 +111,15 @@ def main():
             continue
         try:
             result = subprocess.run(
-                ["python", script_path],
+                [sys.executable, script_path],
                 capture_output=True,
                 text=True,
                 cwd="."
             )
+            if result.returncode != 0:
+                print(f"  {script_path}: non-zero exit code {result.returncode}")
+                if result.stderr:
+                    print(result.stderr) 
         except Exception as e:
             print(f"  {script_path}: {e}")
     
