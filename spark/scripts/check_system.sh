@@ -179,7 +179,7 @@ sleep 20
 
 echo -e "\n4. Kafka topics:"
 final_kafka_counts=$(get_kafka_total_offsets)
-kafka_delta=$((final_kafka_counts - initial_kafka_total))
+kafka_delta=$((final_kafka_counts - initial_kafka_counts))
 echo "Kafka total offsets: $final_kafka_counts (+$kafka_delta new)"
 
 echo -e "\n5. DWH PostgreSQL:"
