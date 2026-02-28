@@ -10,6 +10,38 @@ if ! command_exists jq; then
     exit 1
 fi
 
+get_kafka_total_offsets() {
+    topics=$(docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list | grep -E "(user_service|order_service|logistics_service)\." || true)
+    total=0
+    for topic in $topics; do
+        count=$(docker exec kafka kafka-run-class kafka.tools.GetOffsetShell \
+            --broker-list localhost:9092 \
+            --topic "$topic" \
+            --time -1 2>/dev/null | awk -F ":" '{sum+=$3} END {print sum+0}')
+        total=$((total + count))
+    done
+    echo "$total"
+}
+
+get_iceberg_count() {
+    if [ "$table_exists" -eq 0 ]; then
+        echo 0
+    else
+        docker exec spark-iceberg spark-sql \
+            --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
+            --conf spark.sql.catalog.iceberg.type=hadoop \
+            --conf spark.sql.catalog.iceberg.warehouse=s3a://warehouse/ \
+            --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
+            --conf spark.hadoop.fs.s3a.access.key=minioadmin \
+            --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
+            --conf spark.hadoop.fs.s3a.path.style.access=true \
+            --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+            --conf spark.sql.catalogImplementation=in-memory \
+            --conf spark.driver.extraJavaOptions="-Dderby.system.home=/home/spark/metastore_db" \
+            -e "SELECT COUNT(*) FROM iceberg.events_raw;" 2>/dev/null | awk '/^[0-9]+$/ {v=$1} END{print v+0}'
+    fi
+}
+
 echo -e "\n1. Checking service availability:"
 
 if docker exec patroni-1 psql postgresql://postgres:postgres@haproxy:5000/postgres -c "SELECT 1" &>/dev/null; then
@@ -53,6 +85,40 @@ else
     echo "Spark Master UI is not available"
     exit 1
 fi
+
+echo -e "\nBaseline metrics:"
+initial_kafka_counts=$(get_kafka_total_offsets)
+echo "Kafka total offsets: $initial_kafka_counts"
+
+initial_stg_count=$(docker exec dwh-postgres psql -U dwh_user -d dwh -t -c "SELECT COUNT(*) FROM dwh_detailed.stg_kafka_events;" 2>/dev/null | tr -d ' ')
+echo "Staging rows in DWH: $initial_stg_count"
+
+table_check_output=$(docker exec spark-iceberg spark-sql \
+    --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
+    --conf spark.sql.catalog.iceberg.type=hadoop \
+    --conf spark.sql.catalog.iceberg.warehouse=s3a://warehouse/ \
+    --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
+    --conf spark.hadoop.fs.s3a.access.key=minioadmin \
+    --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
+    --conf spark.hadoop.fs.s3a.path.style.access=true \
+    --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+    --conf spark.sql.catalogImplementation=in-memory \
+    --conf spark.driver.extraJavaOptions="-Dderby.system.home=/home/spark/metastore_db" \
+    -e "SELECT COUNT(*) FROM iceberg.events_raw;" 2>/dev/null || true)
+
+if echo "$table_check_output" | grep -qi "Table or view not found\|NoSuchTableException\|AnalysisException"; then
+    table_exists=0
+else
+    table_exists=1
+fi
+
+if [ "$table_exists" -gt 0 ]; then
+    initial_iceberg_count=$(get_iceberg_count)
+else
+    initial_iceberg_count=0
+fi
+
+echo "Iceberg events_raw rows: $initial_iceberg_count (table exists: $table_exists)"
 
 echo -e "\n2. Checking Debezium connectors:"
 connectors=$(curl -s http://localhost:8083/connectors | jq -r '.[]' 2>/dev/null)
@@ -112,21 +178,9 @@ echo "Waiting 20 seconds for data to propagate through Kafka, DWH and Iceberg...
 sleep 20
 
 echo -e "\n4. Kafka topics:"
-topics_list=$(docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list | grep -E "user_service|order_service|logistics_service" || true)
-for topic in $topics_list; do
-    count=$(docker exec kafka kafka-run-class kafka.tools.GetOffsetShell \
-        --broker-list localhost:9092 \
-        --topic "$topic" \
-        --time -1 2>/dev/null | awk -F ":" '{sum+=$3} END {print sum}')
-    prev_count=${initial_kafka_counts["$topic"]}
-    if [ -z "$prev_count" ]; then prev_count=0; fi
-    increase=$((count - prev_count))
-    if [ "$increase" -gt 0 ]; then
-        echo "$topic: $count messages (+$increase new)"
-    else
-        echo "$topic: $count messages (no new)"
-    fi
-done
+final_kafka_counts=$(get_kafka_total_offsets)
+kafka_delta=$((final_kafka_counts - initial_kafka_total))
+echo "Kafka total offsets: $final_kafka_counts (+$kafka_delta new)"
 
 echo -e "\n5. DWH PostgreSQL:"
 final_stg_count=$(docker exec dwh-postgres psql -U dwh_user -d dwh -t -c "SELECT COUNT(*) FROM dwh_detailed.stg_kafka_events;" 2>/dev/null | tr -d ' ')
@@ -141,18 +195,7 @@ echo -e "\n9. Iceberg table events_raw:"
 if [ "$table_exists" -eq 0 ]; then
     echo "Table iceberg.events_raw still not found"
 else
-    final_iceberg_count=$(docker exec spark-iceberg spark-sql \
-        --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-        --conf spark.sql.catalog.iceberg.type=hadoop \
-        --conf spark.sql.catalog.iceberg.warehouse=s3a://warehouse/ \
-        --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
-        --conf spark.hadoop.fs.s3a.access.key=minioadmin \
-        --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
-        --conf spark.hadoop.fs.s3a.path.style.access=true \
-        --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
-        --conf spark.sql.catalogImplementation=in-memory \
-        --conf spark.driver.extraJavaOptions="-Dderby.system.home=/home/spark/metastore_db" \
-        -e "SELECT COUNT(*) FROM iceberg.events_raw;" 2>/dev/null | grep -v "^SLF4J" | grep -v "^WARN" | tail -1 | tr -d ' ')
+    final_iceberg_count=$(get_iceberg_count)
     increase=$((final_iceberg_count - initial_iceberg_count))
     if [ "$increase" -gt 0 ]; then
         echo "Records in Iceberg: $final_iceberg_count (+$increase new)"
