@@ -124,63 +124,63 @@ docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list
 
 Реализован поток "Kafka $\to$ Spark $\to$ Iceberg":
 - приложение читает Debezium-топики трёх сервисов;
-- в `iceberg.events_raw` сохраняются технические поля CDC;
+- в `iceberg.default.events_raw` сохраняются технические поля CDC;
 - загрузка append-only с checkpoint в `s3a://warehouse/checkpoints/iceberg`;
 - используется S3-совместимое объектное хранилище MinIO + Iceberg как табличный слой DWH;
 - схема рассчитана на масштабирование и отделена от OLTP PostgreSQL.
 
 ## Инструкция по запуску
+0. Остановить и удалить контейнеры и тома (в корне)
+```
+docker compose down -v --remove-orphans || true
+docker compose -f ha/docker-compose.yml down -v --remove-orphans || true
+```
 1. Запустить скрипты генерации инициализации DDL
-Необходимо выполнить из корня проекта
 ```
 # установка библиотеки 
-python -m pip install pyyaml  
+python3 -m pip install pyyaml  
 
 # запуск скриптов
-python dwh/scripts/generate_hubs.py
-python dwh/scripts/generate_links.py
-python dwh/scripts/generate_satellites.py
-python dwh/scripts/generate_ddl.py
+python3 dwh/scripts/generate_hubs.py
+python3 dwh/scripts/generate_links.py
+python3 dwh/scripts/generate_satellites.py
+python3 dwh/scripts/generate_ddl.py
 ```
 2. Запустить сервисы
 ```
-cd ha/
-docker-compose up -d
-```
-3. Проверка создания таблиц
-```
-docker-compose exec dwh-postgres psql -U dwh_user -d dwh -c "\dt dwh_detailed.*"
+docker compose -f ha/docker-compose.yml up -d --build
+docker compose -f ha/docker-compose.yml ps
+
+# проверить готовность
+docker compose -f ha/docker-compose.yml logs migrator
 ```
 
-4. Проверка работы debezium
+`migrator` должен завершиться с кодом 0. `dwh-postgres`, `debezium`, `kafka`, `dmp`, `spark-iceberg` должны быть в состоянии `Up`.
+
+3. Проверка репликации
 ```
-cd ../debezium
-./scripts/check-debezium.sh
+docker compose -f ha/docker-compose.yml exec -T patroni-1 psql -U postgres -d postgres -c "SELECT pg_is_in_recovery();"
+docker compose -f ha/docker-compose.yml exec -T patroni-2 psql -U postgres -d postgres -c "SELECT pg_is_in_recovery();"
+docker compose -f ha/docker-compose.yml exec -T patroni-3 psql -U postgres -d postgres -c "SELECT pg_is_in_recovery();"
+```
+Один узел должен быть с `f`, это primary, остальные с `t`, replica.
+
+
+4. Проверка dwh
+```
+docker compose -f ha/docker-compose.yml exec -T dwh-postgres psql -U dwh_user -d dwh -c "\dt dwh_detailed.*"
 ```
 
-5. Проверка подключения коннекторов
+5. Проверка работы debezium и kafka
 ```
+bash debezium/scripts/check-debezium.sh
 curl -s http://localhost:8083/connectors | jq .
 ```
 
-6. Протестировать запись в MinIO
+6. Проверка e2e для CDC $\to$ DWH
 ```
 cd spark/scripts
-./check_system.sh
+bash check_system.sh
 ```
 
-7. Проверить данные в Iceberg вручную
-```
-docker exec spark-iceberg spark-sql \
-    --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
-    --conf spark.sql.catalog.iceberg.type=hadoop \
-    --conf spark.sql.catalog.iceberg.warehouse=s3a://warehouse/ \
-    --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
-    --conf spark.hadoop.fs.s3a.access.key=minioadmin \
-    --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
-    --conf spark.hadoop.fs.s3a.path.style.access=true \
-    --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
-    --conf spark.sql.catalogImplementation=in-memory \
-    --conf spark.driver.extraJavaOptions="-Dderby.system.home=/home/spark/metastore_db" \
-    -e "SELECT source_db, source_table, event_type, COUNT(*) FROM iceberg.events_raw GROUP BY 1,2,3 ORDER BY 1,2,3;"
-```
+Если ошибок нет и видно прирост Kafka offsets, `stg_kafka_events`, то система поднята.
