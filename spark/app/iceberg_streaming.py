@@ -35,7 +35,7 @@ TOPICS = [
     "logistics_service.public.shipment_status_history"
 ]
 
-ICEBERG_TABLE = "iceberg.events_raw"
+ICEBERG_TABLE = "iceberg.default.events_raw"
 
 def create_spark_session():
     return SparkSession.builder \
@@ -56,7 +56,7 @@ def create_spark_session():
 
 def init_iceberg_tables(spark):
     spark.sql("""
-        CREATE TABLE IF NOT EXISTS iceberg.events_raw (
+        CREATE TABLE IF NOT EXISTS iceberg.default.events_raw (
             topic STRING,
             partition INT,
             offset BIGINT,
@@ -73,7 +73,6 @@ def init_iceberg_tables(spark):
             load_timestamp TIMESTAMP
         ) USING iceberg
         PARTITIONED BY (days(kafka_timestamp), source_db)
-        LOCATION 's3a://warehouse/events_raw'
     """)
     logger.info("Iceberg tables initialized")
 
