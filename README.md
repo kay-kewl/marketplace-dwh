@@ -92,7 +92,7 @@ Data Vault 2.0
 - **Параллельная загрузка:** Строгое разделение на хабы, линки и сателлиты позволяет выполнять загрузку данных в разные части модели одновременно, без блокировок и взаимного влияния. 
 - **Использование SCD2-структур:** Поскольку исходные данные уже содержат версионность, это удобно можно использовать для маппинга в сателлиты Data Vault 2.0, сохраняя всю историю изменений без потерь и дублирования логики.
 - **Устойчивость к изменениям:** Добавление нового источника или атрибута не требует перестройки существующей модели, достаточно создать новый сателлит.
-- **Insert-only:** Отсутствие Update и Delete гарантирует идемпотентность загрузки и возможность отката во времени для восстановления состояния данных на любой момент.
+- **Append-first подход:** CDC-события сохраняются в staging insert-only, а в сателлитах применяется SCD2, что сохраняет историю изменений и обеспечивает идемпотентную загрузку.
 
 ## DDL
 В файле dwh/docs/entities.md содержится описание хабов, линков и сателитов для DDL детального слоя.
@@ -180,5 +180,7 @@ docker exec spark-iceberg spark-sql \
     --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
     --conf spark.hadoop.fs.s3a.path.style.access=true \
     --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+    --conf spark.sql.catalogImplementation=in-memory \
+    --conf spark.driver.extraJavaOptions="-Dderby.system.home=/home/spark/metastore_db" \
     -e "SELECT source_db, source_table, event_type, COUNT(*) FROM iceberg.events_raw GROUP BY 1,2,3 ORDER BY 1,2,3;"
 ```
