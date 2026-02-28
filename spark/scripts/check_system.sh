@@ -209,7 +209,7 @@ echo "Created shipment: $shipment_id"
 echo "Waiting for data to propagate through Kafka and DWH..."
 final_kafka_counts=$initial_kafka_counts
 final_stg_count=$initial_stg_count
-for _ in {1..9} do
+for _ in {1..9}; do
     sleep 10
     final_kafka_counts=$(get_kafka_total_offsets)
     final_stg_count=$(docker exec dwh-postgres psql -U dwh_user -d dwh -t -c "SELECT COUNT(*) FROM dwh_detailed.stg_kafka_events;" 2>/dev/null | tr -d ' ')
