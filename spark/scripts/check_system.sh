@@ -39,7 +39,7 @@ get_iceberg_count() {
             --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
             --conf spark.sql.catalogImplementation=in-memory \
             --conf spark.driver.extraJavaOptions="-Dderby.system.home=/home/spark/metastore_db" \
-            -e "SELECT COUNT(*) FROM iceberg.events_raw;" 2>/dev/null || true)
+            -e "SELECT COUNT(*) FROM iceberg.default.events_raw;" 2>/dev/null || true)
         echo "$output" | awk '/^[0-9]+$/ {v=$1} END{print v+0}'
     fi
 }
@@ -209,7 +209,7 @@ echo "Created shipment: $shipment_id"
 echo "Waiting for data to propagate through Kafka and DWH..."
 final_kafka_counts=$initial_kafka_counts
 final_stg_count=$initial_stg_count
-for _ in {1...9} do
+for _ in {1..9} do
     sleep 10
     final_kafka_counts=$(get_kafka_total_offsets)
     final_stg_count=$(docker exec dwh-postgres psql -U dwh_user -d dwh -t -c "SELECT COUNT(*) FROM dwh_detailed.stg_kafka_events;" 2>/dev/null | tr -d ' ')
