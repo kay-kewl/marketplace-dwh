@@ -157,6 +157,11 @@ docker compose -f ha/docker-compose.yml logs migrator
 
 `migrator` должен завершиться с кодом 0. `dwh-postgres`, `debezium`, `kafka`, `dmp`, `spark-iceberg` должны быть в состоянии `Up`.
 
+Проверка статуса `migrator`:
+```
+docker compose -f ha/docker-compose.yml ps migrator
+```
+
 3. Проверка репликации
 ```
 docker compose -f ha/docker-compose.yml exec -T patroni-1 psql -U postgres -d postgres -c "SELECT pg_is_in_recovery();"
@@ -179,8 +184,7 @@ curl -s http://localhost:8083/connectors | jq .
 
 6. Проверка e2e для CDC $\to$ DWH
 ```
-cd spark/scripts
-bash check_system.sh
+bash spark/scripts/check_system.sh
 ```
 
-Если ошибок нет и видно прирост Kafka offsets, `stg_kafka_events`, то система поднята.
+Если ошибок нет и видно прирост Kafka offsets, `stg_kafka_events`, `iceberg.default.events_raw`, то система поднята.
