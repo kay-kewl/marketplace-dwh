@@ -393,7 +393,7 @@ services:
       /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-iceberg:7077 --webui-port 8081 &
       sleep 10 &&
       echo 'Submitting streaming job...' &&
-      sh /scripts/submit_job.sh
+      bash /scripts/submit_job.sh
       "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
