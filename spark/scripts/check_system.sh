@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -o pipefail
 
 command_exists() {
     command -v "$1" >/dev/null 2>&1
@@ -27,7 +28,7 @@ get_iceberg_count() {
     if [ "$table_exists" -eq 0 ]; then
         echo 0
     else
-        docker exec spark-iceberg spark-sql \
+        output=$(docker exec spark-iceberg spark-sql \
             --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
             --conf spark.sql.catalog.iceberg.type=hadoop \
             --conf spark.sql.catalog.iceberg.warehouse=s3a://warehouse/ \
@@ -38,7 +39,8 @@ get_iceberg_count() {
             --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
             --conf spark.sql.catalogImplementation=in-memory \
             --conf spark.driver.extraJavaOptions="-Dderby.system.home=/home/spark/metastore_db" \
-            -e "SELECT COUNT(*) FROM iceberg.events_raw;" 2>/dev/null | awk '/^[0-9]+$/ {v=$1} END{print v+0}'
+            -e "SELECT COUNT(*) FROM iceberg.events_raw;" 2>/dev/null || true)
+        echo "$output" | awk '/^[0-9]+$/ {v=$1} END{print v+0}'
     fi
 }
 
@@ -104,9 +106,9 @@ table_check_output=$(docker exec spark-iceberg spark-sql \
     --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
     --conf spark.sql.catalogImplementation=in-memory \
     --conf spark.driver.extraJavaOptions="-Dderby.system.home=/home/spark/metastore_db" \
-    -e "SELECT COUNT(*) FROM iceberg.events_raw;" 2>/dev/null || true)
+    -e "SELECT COUNT(*) FROM iceberg.default.events_raw;" 2>/dev/null || true)
 
-if echo "$table_check_output" | grep -qi "Table or view not found\|NoSuchTableException\|AnalysisException"; then
+if [ -z "$table_check_output" ] || echo "$table_check_output" | grep -qi "Table or view not found\|NoSuchTableException\|AnalysisException\|Missing database in table identifier\|UNSUPPORTED_DATASOURCE_FOR_DIRECT_QUERY"; then
     table_exists=0
 else
     table_exists=1
@@ -153,37 +155,76 @@ fi
 echo "Master node: $master_node"
 
 user_id=$(docker exec $master_node psql postgresql://postgres:postgres@localhost:5432/user_service_db -tA -c "
+WITH v AS (
+    SELECT (
+        substr(md5(random()::text || clock_timestamp()::text), 1, 8) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 9, 4) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 13, 4) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 17, 4) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 21, 12)
+    )::uuid AS id
+)
 INSERT INTO users (user_external_id, email, first_name, last_name, phone, status)
-VALUES (gen_random_uuid(), 'test.data.$(date +%s)@example.com', 'Test', 'Data', '+1234567890', 'ACTIVE')
+SELECT id, 'test.data.$(date +%s)@example.com', 'Test', 'Data', '+1234567890', 'ACTIVE' FROM v
 RETURNING user_external_id;
 " | head -1 | tr -d ' ')
+[ -n "$user_id" ] || { echo "Failed to created user test record"; exit 1; }
 echo "Created user: $user_id"
 
 order_id=$(docker exec $master_node psql postgresql://postgres:postgres@localhost:5432/order_service_db -tA -c "
+WITH v AS (
+    SELECT (
+        substr(md5(random()::text || clock_timestamp()::text), 1, 8) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 9, 4) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 13, 4) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 17, 4) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 21, 12)
+    )::uuid AS id
+)
 INSERT INTO orders (order_external_id, user_external_id, order_number, status, total_amount, currency)
-VALUES (gen_random_uuid(), '$user_id', 'TEST-ORDER-$(date +%s)', 'NEW', 99.99, 'RUB')
+SELECT id, '$user_id', 'TEST-ORDER-$(date +%s)', 'NEW', 99.99, 'RUB' FROM v
 RETURNING order_external_id;
 " | head -1 | tr -d ' ')
+[ -n "$order_id" ] || { echo "Failed to created order test record"; exit 1; }
 echo "Created order: $order_id"
 
 shipment_id=$(docker exec $master_node psql postgresql://postgres:postgres@localhost:5432/logistics_service_db -tA -c "
+WITH v AS (
+    SELECT (
+        substr(md5(random()::text || clock_timestamp()::text), 1, 8) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 9, 4) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 13, 4) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 17, 4) || '-' ||
+        substr(md5(random()::text || clock_timestamp()::text), 21, 12)
+    )::uuid AS id
+)
 INSERT INTO shipments (shipment_external_id, order_external_id, tracking_number, status, weight_grams, package_count)
-VALUES (gen_random_uuid(), '$order_id', 'TRK-$(date +%s)', 'CREATED', 500, 1)
+SELECT id, '$order_id', 'TRK-$(date +%s)', 'CREATED', 500, 1 FROM v
 RETURNING shipment_external_id;
 " | head -1 | tr -d ' ')
+[ -n "$shipment_id" ] || { echo "Failed to created shipment test record"; exit 1; }
 echo "Created shipment: $shipment_id"
 
 
-echo "Waiting 20 seconds for data to propagate through Kafka, DWH and Iceberg..."
-sleep 20
+echo "Waiting for data to propagate through Kafka and DWH..."
+final_kafka_counts=$initial_kafka_counts
+final_stg_count=$initial_stg_count
+for _ in {1...9} do
+    sleep 10
+    final_kafka_counts=$(get_kafka_total_offsets)
+    final_stg_count=$(docker exec dwh-postgres psql -U dwh_user -d dwh -t -c "SELECT COUNT(*) FROM dwh_detailed.stg_kafka_events;" 2>/dev/null | tr -d ' ')
+    kafka_delta=$((final_kafka_counts - initial_kafka_counts))
+    stg_delta=$((final_stg_count - initial_stg_count))
+    if [ "$kafka_delta" -ge 3 ] && [ "$stg_delta" -ge 3 ]; then
+        break
+    fi
+done
 
 echo -e "\n4. Kafka topics:"
-final_kafka_counts=$(get_kafka_total_offsets)
 kafka_delta=$((final_kafka_counts - initial_kafka_counts))
 echo "Kafka total offsets: $final_kafka_counts (+$kafka_delta new)"
 
 echo -e "\n5. DWH PostgreSQL:"
-final_stg_count=$(docker exec dwh-postgres psql -U dwh_user -d dwh -t -c "SELECT COUNT(*) FROM dwh_detailed.stg_kafka_events;" 2>/dev/null | tr -d ' ')
 increase=$((final_stg_count - initial_stg_count))
 if [ "$increase" -gt 0 ]; then
     echo "Records in staging: $final_stg_count (+$increase new)"
@@ -191,9 +232,9 @@ else
     echo "Records in staging: $final_stg_count (no increase)"
 fi
 
-echo -e "\n9. Iceberg table events_raw:"
+echo -e "\n6. Iceberg table events_raw:"
 if [ "$table_exists" -eq 0 ]; then
-    echo "Table iceberg.events_raw still not found"
+    echo "Table iceberg.default.events_raw still not found"
 else
     final_iceberg_count=$(get_iceberg_count)
     increase=$((final_iceberg_count - initial_iceberg_count))
@@ -204,7 +245,7 @@ else
     fi
 fi
 
-echo -e "\n6. Checking Spark Streaming logs:"
+echo -e "\n7. Checking Spark Streaming logs:"
 spark_logs=$(docker logs spark-iceberg --tail 20 2>&1 | grep -E "Writing epoch|records" || true)
 if [ -n "$spark_logs" ]; then
     echo "Spark is writing data:"
@@ -215,7 +256,7 @@ else
     echo "No write messages in Spark logs"
 fi
 
-echo -e "\n7. Checking MinIO buckets:"
+echo -e "\n8. Checking MinIO buckets:"
 if docker exec mc mc ls myminio/warehouse/ &>/dev/null; then
     echo "Bucket warehouse exists"
     docker exec mc mc ls myminio/warehouse/ | while read line; do
