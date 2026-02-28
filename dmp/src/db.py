@@ -154,7 +154,7 @@ class DBManager:
         columns, values, parameters, hash_parts = [], [], [], []
         for parent in sorted_parents:
             if parent['val'] is None:
-                return
+                return None
             
             columns.append(sql.Identifier(f"{parent['hub']}_id"))
             values.append(sql.SQL("dwh_detailed.md5_hash(%s)"))
@@ -183,6 +183,7 @@ class DBManager:
         )
 
         current.execute(q, parameters)
+        return link_hk_json
 
     def load_satellite(self, current, table, hub, hub_bk, source, attributes, row, is_deleted):
         if hub_bk is None:
