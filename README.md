@@ -111,11 +111,23 @@ ER-диаграмма:
 docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list
 ```
 ## DMP
+Реализован потоковый DMP:
+- чтение CDC-событий из Kafka (Debezium);
+- insert-only загрузка в `dwh_detailed.stg_kafka_events`;
+- автоматическое разложение в hub-link-satellite по yaml-конфигу;
+- SCD2 для satellite.
 
 ## Iceberg + MinIO
 Добавлено масштабируемое хранилище MinIO + Iceberg(табличный формат). В качестве вычислительного движка используется Apache Spark. Код Spark-приложения расположен в директории spark/
 
 В ha/docker-compose добавлены новые сервисы minio, spark-iceberg, mc
+
+Реализован поток "Kafka $\to$ Spark $\to$ Iceberg":
+- приложение читает Debezium-топики трёх сервисов;
+- в `iceberg.events_raw` сохраняются технические поля CDC;
+- загрузка append-only с checkpoint в `s3a://warehouse/checkpoints/iceberg`;
+- используется S3-совместимое объектное хранилище MinIO + Iceberg как табличный слой DWH;
+- схема рассчитана на масштабирование и отделена от OLTP PostgreSQL.
 
 ## Инструкция по запуску
 1. Запустить скрипты генерации инициализации DDL
@@ -155,4 +167,18 @@ curl -s http://localhost:8083/connectors | jq .
 ```
 cd spark/scripts
 ./check_system.sh
+```
+
+7. Проверить данные в Iceberg вручную
+```
+docker exec spark-iceberg spark-sql \
+    --conf spark.sql.catalog.iceberg=org.apache.iceberg.spark.SparkCatalog \
+    --conf spark.sql.catalog.iceberg.type=hadoop \
+    --conf spark.sql.catalog.iceberg.warehouse=s3a://warehouse/ \
+    --conf spark.hadoop.fs.s3a.endpoint=http://minio:9000 \
+    --conf spark.hadoop.fs.s3a.access.key=minioadmin \
+    --conf spark.hadoop.fs.s3a.secret.key=minioadmin \
+    --conf spark.hadoop.fs.s3a.path.style.access=true \
+    --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+    -e "SELECT source_db, source_table, event_type, COUNT(*) FROM iceberg.events_raw GROUP BY 1,2,3 ORDER BY 1,2,3;"
 ```
