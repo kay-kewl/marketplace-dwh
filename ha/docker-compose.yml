@@ -19,7 +19,10 @@ x-patroni-environment: &patroni-environment
     ["host all all 0.0.0.0/0 scram-sha-256", "host replication replicator 0.0.0.0/0 scram-sha-256"]
 
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.9.3
+  build:
+    context: ../airflow
+    dockerfile: Dockerfile
+  image: marketplace-airflow:2.9.3
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
