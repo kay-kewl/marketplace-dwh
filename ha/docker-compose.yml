@@ -18,6 +18,25 @@ x-patroni-environment: &patroni-environment
   PATRONI_POSTGRESQL_PGHBA: >
     ["host all all 0.0.0.0/0 scram-sha-256", "host replication replicator 0.0.0.0/0 scram-sha-256"]
 
+x-airflow-common: &airflow-common
+  build:
+    context: ../airflow
+    dockerfile: Dockerfile
+  image: marketplace-airflow:2.9.3
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
+    AIRFLOW__WEBSERVER__SECRET_KEY: airflow_secret_key_change_me
+  volumes:
+    - ../airflow/dags:/opt/airflow/dags
+    - ../airflow/sql:/opt/airflow/sql
+    - ../airflow/plugins:/opt/airflow/plugins
+    - airflow_logs:/opt/airflow/logs
+  networks:
+    - ha_net
+
 x-patroni-base: &patroni-base
   build: .
   environment:
@@ -419,6 +438,69 @@ services:
       timeout: 5s
       retries: 5
 
+  airflow-db:
+    image: postgres:17
+    container_name: airflow-db
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_db_data:/var/lib/postgresql/data
+    networks:
+      - ha_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+    command: >
+      bash -ceu "
+      airflow db migrate &&
+      airflow users create
+        --username admin
+        --password admin
+        --firstname Air
+        --lastname Flow
+        --role Admin
+        --email admin@example.com || true
+      "
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    command: webserver
+    ports:
+      - "8088:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    command: scheduler
+
 volumes:
   pgdata_1:
   pgdata_2:
@@ -428,6 +510,8 @@ volumes:
   zookeeper_data:
   minio_data:
   spark_data:
+  airflow_db_data:
+  airflow_logs:
 
 networks:
   ha_net:
