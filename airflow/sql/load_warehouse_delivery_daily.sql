@@ -1,5 +1,5 @@
 DELETE FROM presentation.warehouse_delivery_daily
-WHERE shipment_date = CAST('{{ params.business_date }}' AS date);
+WHERE shipment_date = CAST('{{ ti.xcom_pull(task_ids="resolve_business_date") }}' AS date);
 
 WITH src AS (
     SELECT
@@ -21,7 +21,7 @@ WITH src AS (
             THEN 1
             WHEN ssd.actual_delivery_date IS NULL
              AND ssd.estimated_delivery_date IS NOT NULL
-             AND ssd.estimated_delivery_date::date < CAST('{{ params.business_date }}' AS date)
+             AND ssd.estimated_delivery_date::date < CAST('{{ ti.xcom_pull(task_ids="resolve_business_date") }}' AS date)
              AND ssd.status IN ('failed_delivery', 'cancelled')
             THEN 1
             ELSE 0
@@ -46,7 +46,7 @@ WITH src AS (
     LEFT JOIN dwh_detailed.link_order_user lou
       ON lou.hub_order_id = ho.hub_order_id
     WHERE ssd.is_current = TRUE
-      AND ssd.dispatched_date::date = CAST('{{ params.business_date }}' AS date)
+      AND ssd.dispatched_date::date = CAST('{{ ti.xcom_pull(task_ids="resolve_business_date") }}' AS date)
 )
 INSERT INTO presentation.warehouse_delivery_daily (
     shipment_date,

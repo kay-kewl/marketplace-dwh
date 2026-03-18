@@ -28,6 +28,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
+    AIRFLOW_CONN_DWH_POSTGRES: postgres://dwh_user:dwh_password@dwh-postgres:5432/dwh
     AIRFLOW__WEBSERVER__SECRET_KEY: airflow_secret_key_change_me
   volumes:
     - ../airflow/dags:/opt/airflow/dags
@@ -357,8 +358,8 @@ services:
     container_name: minio
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9002:9000"
+      - "9003:9001"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -462,16 +463,7 @@ services:
       airflow-db:
         condition: service_healthy
     command: >
-      bash -ceu "
-      airflow db migrate &&
-      airflow users create
-        --username admin
-        --password admin
-        --firstname Air
-        --lastname Flow
-        --role Admin
-        --email admin@example.com || true
-      "
+      bash -ceu "airflow db migrate && airflow users create --username admin --password admin --firstname Air --lastname Flow --role Admin --email admin@example.com || true"
     restart: "no"
 
   airflow-webserver:

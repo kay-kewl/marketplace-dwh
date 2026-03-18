@@ -39,9 +39,6 @@ with DAG(
         task_id="load_warehouse_daily",
         conn_id=DWH_CONN_ID,
         sql=read_sql_file("load_warehouse_delivery_daily.sql"),
-        params={
-            "business_date": "{{ ti.xcom_pull(task_ids='resolve_business_date') }}",
-        },
     )
 
     get_business_date >> load_warehouse_daily
