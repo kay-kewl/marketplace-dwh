@@ -179,25 +179,18 @@ services:
       - ha_net
     command: >
       bash -ceu "
-      set -o pipefail;
-      until pg_isready -h haproxy -p 5000; do sleep 1; done;
-
-      PRIMARY_HOST='';
+      until pg_isready -h haproxy -p 5000; do sleep 1; done &&
+      PRIMARY_HOST='' &&
       until [ -n \"$$PRIMARY_HOST\" ]; do
         for node in patroni-1 patroni-2 patroni-3; do
-          if psql \"postgresql://postgres:postgres@$$node:5432/postgres\" -tA -c \"SELECT NOT pg_is_in_recovery()\" 2>/dev/null | grep -q '^t$$'; then
-            PRIMARY_HOST=$$node;
-            break;
-          fi;
-        done;
-        [ -n \"$$PRIMARY_HOST\" ] || sleep 1;
-      done;
-
-      export PGHOST=$$PRIMARY_HOST;
-      export PGPORT=5432;
-      export PGUSER=postgres;
-      export PGPASSWORD=postgres;
-
+          if psql \"postgresql://postgres:postgres@$${node}:5432/postgres\" -tA -c \"SELECT NOT pg_is_in_recovery()\" 2>/dev/null | grep -q '^t$$'; then
+            PRIMARY_HOST=$$node
+            break
+          fi
+        done
+        [ -n \"$$PRIMARY_HOST\" ] || sleep 1
+      done &&
+      export PGHOST=$$PRIMARY_HOST PGPORT=5432 PGUSER=postgres PGPASSWORD=postgres &&
       psql -v ON_ERROR_STOP=1 -f /migrations/000_create_dbs.sql &&
       psql -v ON_ERROR_STOP=1 -d user_service_db -f /migrations/001_user_service_db.sql &&
       psql -v ON_ERROR_STOP=1 -d order_service_db -f /migrations/002_order_service_db.sql &&
@@ -325,8 +318,7 @@ services:
       sh -c "
       sleep 10 &&
       sh /scripts/register-connectors.sh &&
-      echo 'All connectors registered!' &&
-      tail -f /dev/null
+      echo 'All connectors registered!'
       "
     networks:
       - ha_net
@@ -339,6 +331,8 @@ services:
         condition: service_healthy
       debezium:
         condition: service_healthy
+      debezium-setup:
+        condition: service_completed_successfully
       dwh-postgres:
         condition: service_healthy
     environment:
@@ -519,18 +513,23 @@ services:
     environment:
       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
       SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      SUPERSET_ADMIN_FIRSTNAME: ${SUPERSET_ADMIN_FIRSTNAME}
+      SUPERSET_ADMIN_LASTNAME: ${SUPERSET_ADMIN_LASTNAME}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
     volumes:
       - superset_home:/app/superset_home
       - ../bi/superset/superset_config.py:/app/pythonpath/superset_config.py:ro
     command: >
       bash -ceu "
       superset db upgrade &&
-      superset fab create-admin \
-        --username ${SUPERSET_ADMIN_USERNAME} \
-        --firstname ${SUPERSET_ADMIN_FIRSTNAME} \
-        --lastname ${SUPERSET_ADMIN_LASTNAME} \
-        --email ${SUPERSET_ADMIN_EMAIL} \
-        --password ${SUPERSET_ADMIN_PASSWORD} || true &&
+      superset fab create-admin
+      --username \"${SUPERSET_ADMIN_USERNAME}\"
+      --firstname \"${SUPERSET_ADMIN_FIRSTNAME}\"
+      --lastname \"${SUPERSET_ADMIN_LASTNAME}\"
+      --email \"${SUPERSET_ADMIN_EMAIL}\"
+      --password \"${SUPERSET_ADMIN_PASSWORD}\" || true &&
       superset init
       "
     networks:
