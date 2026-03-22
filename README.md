@@ -206,3 +206,103 @@ localhost:9092
 http://localhost:9000
 http://localhost:9001
 ```
+
+# Homework 3
+
+## Airflow в docker-compose
+- Добавлены сервисы Airflow в `ha/docker-compose.yml`:
+    - `airflow-db`
+    - `airflow-init`
+    - `airflow-webserver`
+    - `airflow-scheduler`
+- Airflow подключен к DWH через connection URI в переменной `AIRFLOW_CONN_DWH_POSTGRES`.
+
+## DAG-и и ETL витрин
+- Реализован DAG `purchases_mart_daily`:
+    - расписание: ежедневно в `02:00`
+    - витрина: `presentation.purchase_analytics`
+    - режим обновления: `full refresh` (`TRUNCATE` + `INSERT`)
+
+- Реализован DAG `warehouse_delivery_daily`:
+    - расписание: ежедневно в `03:00`
+    - витрина: `presentation.warehouse_delivery_daily`
+    - режим обновления: за `business_date` (за вчера)
+    - защита от дублей: удаление старых данных за дату перед вставкой
+
+- DDL обеих витрин лежит в `dwh/ddl/002_presentation.sql`.
+
+## BI
+- Поднят Apache Superset в `ha/docker-compose.yml`:
+    - `superset-db`
+    - `superset-init`
+    - `superset`
+- Конфиг Superset: `bi/superset/superset_config.py`.
+
+## Как запустить
+
+1. Очистить окружение:
+```bash
+docker compose -f ha/docker-compose.yml down -v --remove-orphans || true
+```
+
+2. Сгенерировать DDL детального слоя:
+```bash
+python3 -m pip install pyyaml
+python3 dwh/scripts/generate_hubs.py
+python3 dwh/scripts/generate_links.py
+python3 dwh/scripts/generate_satellites.py
+python3 dwh/scripts/generate_ddl.py
+```
+
+3. Задать переменные для Superset:
+```bash
+export SUPERSET_SECRET_KEY="superset_secret_key_change_me"
+export SUPERSET_ADMIN_USERNAME="admin"
+export SUPERSET_ADMIN_PASSWORD="admin"
+export SUPERSET_ADMIN_FIRSTNAME="Superset"
+export SUPERSET_ADMIN_LASTNAME="Admin"
+export SUPERSET_ADMIN_EMAIL="admin@example.com"
+```
+
+4. Поднять сервисы:
+```bash
+docker compose -f ha/docker-compose.yml up -d --build
+```
+
+5. Проверить, что сервисы подняты:
+```bash
+docker compose -f ha/docker-compose.yml ps
+```
+
+6. Проверить Airflow UI:
+- URL: `http://localhost:8088`
+- Логин/пароль по умолчанию: `admin/admin`
+- В списке DAG должны быть:
+    - `purchases_mart_daily`
+    - `warehouse_delivery_daily`
+
+7. Проверить, что витрины созданы и наполняются:
+```bash
+docker compose -f ha/docker-compose.yml exec -T dwh-postgres \
+    psql -U dwh_user -d dwh -c "\dt presentation.*"
+
+docker compose -f ha/docker-compose.yml exec -T dwh-postgres \
+    psql -U dwh_user -d dwh -c "SELECT COUNT(*) FROM presentation.purchase_analytics;"
+
+docker compose -f ha/docker-compose.yml exec -T dwh-postgres \
+    psql -U dwh_user -d dwh -c "SELECT COUNT(*) FROM presentation.warehouse_delivery_daily;"
+```
+
+8. Проверить бизнес-логику второй витрины:
+- В Airflow запустить DAG `warehouse_delivery_daily` дважды с одинаковым `business_date` через `dag_run.conf`.
+- Проверить, что число строк за дату не удваивается:
+```sql
+SELECT shipment_date, warehouse_id, COUNT(*)
+FROM presentation.warehouse_delivery_daily
+GROUP BY shipment_date, warehouse_id
+HAVING COUNT(*) > 1;
+```
+
+9. Проверить Superset UI:
+- URL: `http://localhost:8089`
+- Логин/пароль: из переменных `SUPERSET_ADMIN_USERNAME` / `SUPERSET_ADMIN_PASSWORD`
