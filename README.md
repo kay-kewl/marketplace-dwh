@@ -1,4 +1,8 @@
-# Homework 1
+# Marketplace Data Warehouse Platform
+
+**Полноценная end-to-end платформа Data Warehouse для онлайн-маркетплейса**
+
+Проект реализует современный аналитический стек: от высокодоступного OLTP-слоя до real-time CDC, моделирования данных по Data Vault 2.0, потоковой загрузки в Iceberg и построения витрин с оркестрацией Airflow + BI в Superset.
 
 ## Миграции
 * В папке migrations созданы 3 файла с миграциями, которые создают структуру трех бд онлайн-магазина.
@@ -83,7 +87,6 @@ postgresql://postgres:postgres@localhost:5432/order_service_db
 postgresql://postgres:postgres@localhost:5432/logistics_service_db
 ```
 
-# Homework 2
 ## Архитектура
 Data Vault 2.0
 ## Обоснование выбора архитектуры
@@ -206,8 +209,6 @@ localhost:9092
 http://localhost:9000
 http://localhost:9001
 ```
-
-# Homework 3
 
 ## Airflow в docker-compose
 - Добавлены сервисы Airflow в `ha/docker-compose.yml`:
